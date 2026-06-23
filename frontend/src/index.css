@@ -6,8 +6,8 @@
 
 @layer base {
   body {
-    @apply bg-dark-900 text-dark-100 font-sans antialiased overflow-hidden select-none;
-    background-color: #121214; /* fallback */
+    @apply text-dark-800 font-sans antialiased overflow-hidden select-none;
+    background-color: #f8fafc; /* 레벨1 배경 적용 */
   }
 
   /* Custom Scrollbars */
@@ -25,7 +25,7 @@
 
 /* React Flow customization */
 .react-flow__background {
-  background-color: #121214;
+  background-color: #f8fafc; /* 레벨1 배경 적용 */
 }
 
 .react-flow__minimap {
