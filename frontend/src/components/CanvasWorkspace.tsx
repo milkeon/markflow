@@ -239,7 +239,7 @@ const CanvasInner: React.FC = () => {
 
           <button
             onClick={handleAddNode}
-            className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold transition-all flex items-center gap-2 shadow-lg shadow-brand-600/10"
+            className="px-4 py-2.5 rounded-xl border border-brand-500 bg-transparent text-brand-500 font-bold hover:bg-brand-500/10 transition-all flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span>노드 추가</span>
@@ -471,7 +471,7 @@ const CanvasInner: React.FC = () => {
                         </span>
                         <div className={`px-3 py-2 rounded-2xl text-xs max-w-[90%] break-words font-medium ${
                           isMe 
-                            ? 'bg-brand-600 text-white rounded-tr-none' 
+                            ? 'bg-transparent border border-brand-500 text-brand-500 rounded-tr-none' 
                             : 'bg-dark-900 text-dark-100 border border-dark-700 rounded-tl-none'
                         }`}>
                           {msg.content}
@@ -580,7 +580,7 @@ const CanvasInner: React.FC = () => {
                         onClick={() => {
                           handleRestoreNodeClick(node.id);
                         }}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-brand-950/60 border border-brand-500/40 text-brand-300 text-xs font-bold hover:bg-brand-900/60 transition-colors"
+                        className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl border border-brand-500 bg-transparent text-brand-500 text-xs font-bold hover:bg-brand-500/10 transition-colors"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>복구</span>

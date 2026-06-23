@@ -145,7 +145,7 @@ export const MarkdownNode: React.FC<MarkdownNodeProps> = ({ id, data, selected }
                       data.unlockNode?.(id);
                       data.emitNodeHistoryAction?.(id, 'update'); // 뷰어 강제 복귀 시 기록
                     }}
-                    className="px-2.5 py-1 rounded bg-brand-600 hover:bg-brand-500 text-xs font-bold text-white flex items-center gap-1 transition-colors"
+                    className="px-2.5 py-1 rounded border border-brand-500 bg-transparent text-brand-500 text-xs font-bold hover:bg-brand-500/10 flex items-center gap-1 transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>뷰어 모드로 전환</span>
