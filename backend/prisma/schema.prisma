@@ -1,0 +1,87 @@
+// backend/prisma/schema.prisma
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 사용자 테이블
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String          @map("password_hash")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  memberships   ProjectMember[]
+  messages      Message[]
+
+  @@map("users")
+}
+
+// 프로젝트 테이블
+model Project {
+  id          String          @id @default(uuid())
+  name        String
+  ownerId     String          @map("owner_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  deletedAt   DateTime?       @map("deleted_at") // 소프트 딜리트 필드
+  members     ProjectMember[]
+  canvases    Canvas[]
+  messages    Message[]
+  histories   NodeHistory[]   // 노드 히스토리 관계 추가
+
+  @@map("projects")
+}
+
+// 프로젝트 멤버 테이블 (권한 매핑)
+model ProjectMember {
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  role      String   // "owner" | "member"
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+// 캔버스 테이블 (JSONB 단일 컬럼 대신 SQLite 호환 String)
+model Canvas {
+  id        String   @id @default(uuid())
+  projectId String   @unique @map("project_id")
+  data      String   // { nodes: [...], edges: [...] } 전체 직렬화 데이터
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("canvases")
+}
+
+// 채팅 메시지 테이블
+model Message {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// 노드 변경 로그 히스토리 테이블
+model NodeHistory {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  nodeId    String   @map("node_id")
+  userId    String   @map("user_id")
+  userEmail String   @map("user_email")
+  action    String   // "create" | "update" | "delete" | "restore"
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("node_histories")
+}

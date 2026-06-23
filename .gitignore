@@ -1,0 +1,27 @@
+# 환경변수
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# 의존성
+node_modules/
+
+# 빌드 결과물
+dist/
+build/
+
+# OS 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 로그
+*.log
+
+# AI / 에디터 개인 설정
+.cursorrules
+memory.md
+.cursor/
+.vscode/

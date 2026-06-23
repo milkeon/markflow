@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-dark-900 text-dark-100 font-sans antialiased overflow-hidden select-none;
+    background-color: #121214; /* fallback */
+  }
+
+  /* Custom Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-700 rounded-full hover:bg-dark-600 transition-colors;
+  }
+}
+
+/* React Flow customization */
+.react-flow__background {
+  background-color: #121214;
+}
+
+.react-flow__minimap {
+  @apply bg-dark-800 border border-dark-700 rounded-lg overflow-hidden shadow-2xl;
+  background-color: #1b1b1f !important;
+}
+
+.react-flow__controls {
+  @apply border border-dark-700 rounded-lg overflow-hidden shadow-xl;
+  background-color: #1b1b1f !important;
+}
+
+.react-flow__controls-button {
+  @apply bg-dark-800 text-dark-300 border-b border-dark-700 hover:bg-dark-700 hover:text-white transition-colors !important;
+}
+
+.react-flow__controls-button:last-child {
+  @apply border-none !important;
+}
+
+.react-flow__edge-path {
+  stroke: #4f4f4f !important;
+  stroke-width: 2 !important;
+  transition: stroke 0.15s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #8b5cf6 !important;
+  stroke-width: 3 !important;
+}
+
+/* markdown editor customization for dark mode */
+.w-md-editor {
+  background-color: #1b1b1f !important;
+  color: #e7e7e7 !important;
+  border: 1px solid #4f4f4f !important;
+}
+
+.w-md-editor-toolbar {
+  background-color: #121214 !important;
+  border-bottom: 1px solid #4f4f4f !important;
+}
+
+.w-md-editor-toolbar button {
+  color: #b0b0b0 !important;
+}
+
+.w-md-editor-toolbar button:hover {
+  color: #ffffff !important;
+  background-color: #4f4f4f !important;
+}
+
+.w-md-editor-content {
+  background-color: #1b1b1f !important;
+}
+
+.w-md-editor-text {
+  color: #e7e7e7 !important;
+}
+
+.w-md-editor-preview {
+  background-color: #1b1b1f !important;
+  border-left: 1px solid #4f4f4f !important;
+  color: #e7e7e7 !important;
+}
