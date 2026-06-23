@@ -53,12 +53,12 @@ export const Login: React.FC<LoginProps> = ({ onBackToHome }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-900 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-transparent relative overflow-hidden">
       {/* 백그라운드 데코레이션 그라데이션 버블 */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-md p-8 rounded-2xl border border-dark-700 bg-dark-800/60 backdrop-blur-xl shadow-2xl relative z-level2">
+      <div className="w-full max-w-md p-8 rounded-2xl border border-dark-300 bg-white/80 backdrop-blur-xl shadow-2xl relative z-level2 text-dark-800">
         
         {/* 로고 (누르면 리프레시 혹은 초기 로그인화면으로) */}
         <div className="flex flex-col items-center mb-8">

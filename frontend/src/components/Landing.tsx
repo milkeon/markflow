@@ -9,7 +9,7 @@ interface LandingProps {
 
 export const Landing: React.FC<LandingProps> = ({ onStart }) => {
   return (
-    <div className="min-h-screen bg-dark-900 text-white flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-transparent text-dark-800 flex flex-col relative overflow-x-hidden">
       {/* 백그라운드 그라데이션 광원 */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand-600/10 rounded-full blur-[180px] pointer-events-none" />
       <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[180px] pointer-events-none" />
