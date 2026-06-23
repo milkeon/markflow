@@ -59,7 +59,7 @@ function App() {
   // 로그인 상태에서 프로젝트가 선택되었을 때 캔버스 구동
   if (currentProject) {
     return (
-      <div className="min-h-screen bg-transparent text-dark-800 flex flex-col w-full h-screen">
+      <div className="min-h-screen bg-dark-900 text-white flex flex-col w-full h-screen">
         <CanvasWorkspace />
         <Toast />
       </div>

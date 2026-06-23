@@ -53,12 +53,12 @@ export const Login: React.FC<LoginProps> = ({ onBackToHome }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-transparent relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-dark-900 relative overflow-hidden">
       {/* 백그라운드 데코레이션 그라데이션 버블 */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-lime-600/20 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-md p-8 rounded-2xl border border-dark-300 bg-white/80 backdrop-blur-xl shadow-2xl relative z-level2 text-dark-800">
+      <div className="w-full max-w-md p-8 rounded-2xl border border-dark-700 bg-dark-800/60 backdrop-blur-xl shadow-2xl relative z-level2">
         
         {/* 로고 (누르면 리프레시 혹은 초기 로그인화면으로) */}
         <div className="flex flex-col items-center mb-8">
@@ -71,7 +71,7 @@ export const Login: React.FC<LoginProps> = ({ onBackToHome }) => {
             }}
             className="flex items-center gap-2 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-lime-500 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform">
               M
             </div>
             <span className="font-extrabold text-2xl bg-gradient-to-r from-white via-dark-100 to-dark-400 bg-clip-text text-transparent">
@@ -130,7 +130,7 @@ export const Login: React.FC<LoginProps> = ({ onBackToHome }) => {
           {/* 제출 버튼 (엔터와 연동됨) */}
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-bold hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-lime-600 text-white font-bold hover:from-brand-500 hover:to-lime-500 shadow-lg shadow-brand-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             {isRegisterMode ? (
               <>

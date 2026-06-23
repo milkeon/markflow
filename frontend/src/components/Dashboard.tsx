@@ -104,10 +104,10 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-dark-800 flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-dark-900 text-white flex flex-col relative overflow-hidden">
       {/* 백그라운드 그라데이션 광원 */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-600/10 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-lime-600/10 rounded-full blur-[160px] pointer-events-none" />
 
       {/* 헤더 바 */}
       <header className="border-b border-dark-700 bg-dark-800/40 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-level2">
@@ -115,7 +115,7 @@ export const Dashboard: React.FC = () => {
           onClick={() => selectProject(null)} 
           className="flex items-center gap-2 cursor-pointer group"
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-lime-500 flex items-center justify-center font-bold text-white shadow-md">
             M
           </div>
           <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-dark-100 to-dark-400 bg-clip-text text-transparent">
@@ -214,7 +214,7 @@ export const Dashboard: React.FC = () => {
                       <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md border ${
                         project.role === 'owner' 
                           ? 'bg-brand-950/60 border-brand-500/40 text-brand-300' 
-                          : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-300'
+                          : 'bg-lime-950/60 border-lime-500/40 text-lime-300'
                       }`}>
                         {project.role === 'owner' ? 'Owner' : 'Member'}
                       </span>
