@@ -34,6 +34,14 @@ export default {
       },
       fontFamily: {
         sans: ['Outfit', 'Inter', 'system-ui', 'sans-serif'],
+      },
+      zIndex: {
+        level1: '10', // 맨 뒤의 배경 (예: 배경 데코 요소)
+        level2: '20', // 헤더, 사이드, 히어로, 메인, 푸터 등 레이아웃 영역
+        level3: '30', // 일반 버튼, 플로팅 툴바, 캔버스 내 조작계
+        level4: '40', // 모달 배경 및 팝업창
+        level5: '50', // 모달 내 영역 구분 및 내부 컴포넌트
+        level6: '60', // 모달 내부 버튼, 최상단 토스트 알림 등
       }
     },
   },

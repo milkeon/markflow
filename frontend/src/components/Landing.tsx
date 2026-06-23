@@ -15,7 +15,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart }) => {
       <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[180px] pointer-events-none" />
 
       {/* 랜딩 헤더 */}
-      <header className="border-b border-dark-700/60 bg-dark-800/20 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-20">
+      <header className="border-b border-dark-700/60 bg-dark-800/20 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-level2">
         <div className="flex items-center gap-2 cursor-pointer">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md">
             M
@@ -34,7 +34,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart }) => {
       </header>
 
       {/* 히어로 섹션 */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-16 flex flex-col lg:flex-row items-center gap-12 relative z-10">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-16 flex flex-col lg:flex-row items-center gap-12 relative z-level2">
         <div className="flex-1 space-y-6 text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-950/60 border border-brand-500/30 text-brand-300 text-xs font-bold">
             ⚡ 실시간 협업 마크다운 화이트보드
@@ -63,13 +63,13 @@ export const Landing: React.FC<LandingProps> = ({ onStart }) => {
           <img 
             src={heroImg} 
             alt="MarkFlow Infinite Canvas Preview" 
-            className="w-full h-auto rounded-2xl border border-dark-700 shadow-2xl relative z-10 transition-transform duration-500 group-hover:scale-[1.01]" 
+            className="w-full h-auto rounded-2xl border border-dark-700 shadow-2xl relative z-level2 transition-transform duration-500 group-hover:scale-[1.01]" 
           />
         </div>
       </main>
 
       {/* 특장점 섹션 */}
-      <section className="bg-dark-800/30 border-t border-dark-700/50 py-16 relative z-10">
+      <section className="bg-dark-800/30 border-t border-dark-700/50 py-16 relative z-level2">
         <div className="max-w-6xl w-full mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
           
           <div className="p-6 rounded-2xl border border-dark-700/60 bg-dark-800/40 space-y-4 text-left">
@@ -106,7 +106,7 @@ export const Landing: React.FC<LandingProps> = ({ onStart }) => {
       </section>
 
       {/* 공용 푸터 */}
-      <footer className="border-t border-dark-700/60 bg-dark-900 py-8 relative z-10 text-center text-xs text-dark-500 font-semibold space-y-2">
+      <footer className="border-t border-dark-700/60 bg-dark-900 py-8 relative z-level2 text-center text-xs text-dark-500 font-semibold space-y-2">
         <p>스티키 메모보다 깊게, 문서보다 가볍게 — MarkFlow</p>
         <p>© 2026 MarkFlow. All rights reserved.</p>
       </footer>

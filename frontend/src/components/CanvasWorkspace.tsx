@@ -225,7 +225,7 @@ const CanvasInner: React.FC = () => {
       {/* 메인 캔버스 뷰포트 영역 */}
       <div className="flex-1 flex flex-col relative h-full">
         {/* 캔버스 조작 툴바 (Floating Panel) */}
-        <div className="absolute top-6 left-6 z-10 flex items-center gap-3 p-2 bg-dark-800/80 border border-dark-700/80 backdrop-blur-md rounded-2xl shadow-2xl">
+        <div className="absolute top-6 left-6 z-level3 flex items-center gap-3 p-2 bg-dark-800/80 border border-dark-700/80 backdrop-blur-md rounded-2xl shadow-2xl">
           <button
             onClick={() => selectProject(null)}
             title="대시보드로 돌아가기"
@@ -324,7 +324,7 @@ const CanvasInner: React.FC = () => {
         </div>
 
         {/* 실시간 온라인 상태 및 오토세이브 상태 뱃지 (우상단) */}
-        <div className="absolute top-6 right-6 z-10 flex items-center gap-3">
+        <div className="absolute top-6 right-6 z-level3 flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-dark-800/80 border border-dark-700/80 backdrop-blur-md rounded-xl text-xs font-semibold">
             <Network className={`w-3.5 h-3.5 ${isOnline ? 'text-brand-400' : 'text-rose-400'}`} />
             <span className={isOnline ? 'text-brand-300' : 'text-rose-300'}>
@@ -356,7 +356,7 @@ const CanvasInner: React.FC = () => {
             <MiniMap zoomable pannable position="bottom-right" />
 
             {/* 실시간 마우스 멀티커서 렌더링 오버레이 */}
-            <div className="pointer-events-none absolute inset-0 z-50 overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 z-level3 overflow-hidden">
               {Object.entries(cursors).map(([socketId, cursor]) => {
                 if (cursor.email === user?.email) return null;
                 
@@ -410,7 +410,7 @@ const CanvasInner: React.FC = () => {
 
       {/* 실시간 협업 우측 사이드바 패널 (채팅 및 히스토리 통합 탭) */}
       {isSidebarOpen && (
-        <div className="w-[320px] bg-dark-800 border-l border-dark-700/80 h-full flex flex-col relative z-20 shadow-2xl">
+        <div className="w-[320px] bg-dark-800 border-l border-dark-700/80 h-full flex flex-col relative z-level2 shadow-2xl">
           
           {/* 사이드바 헤더 및 탭 셀렉터 */}
           <div className="px-4 pt-4 pb-2 border-b border-dark-700/60">
@@ -543,7 +543,7 @@ const CanvasInner: React.FC = () => {
 
       {/* 모달: 삭제된 노드 휴지통 */}
       {isNodeTrashOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md p-6 rounded-2xl border border-dark-700 bg-dark-800 shadow-2xl relative max-h-[70vh] flex flex-col">
             <button 
               onClick={() => setIsNodeTrashOpen(false)}

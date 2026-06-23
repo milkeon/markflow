@@ -110,7 +110,7 @@ export const Dashboard: React.FC = () => {
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
 
       {/* 헤더 바 */}
-      <header className="border-b border-dark-700 bg-dark-800/40 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-20">
+      <header className="border-b border-dark-700 bg-dark-800/40 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-level2">
         <div 
           onClick={() => selectProject(null)} 
           className="flex items-center gap-2 cursor-pointer group"
@@ -148,7 +148,7 @@ export const Dashboard: React.FC = () => {
       </header>
 
       {/* 메인 대시보드 콘텐츠 */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 relative z-10 flex flex-col gap-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-10 relative z-level2 flex flex-col gap-8">
         
         {/* 신규 프로젝트 생성 폼 */}
         <section className="bg-dark-800/40 border border-dark-700/60 p-6 rounded-2xl backdrop-blur-md">
@@ -281,7 +281,7 @@ export const Dashboard: React.FC = () => {
 
       {/* 모달: 이름 변경 및 멤버 초대 */}
       {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md p-6 rounded-2xl border border-dark-700 bg-dark-800 shadow-2xl relative">
             <button 
               onClick={() => { setActiveModal(null); setTargetProject(null); }}
@@ -333,7 +333,7 @@ export const Dashboard: React.FC = () => {
 
       {/* 모달: 휴지통 열기 */}
       {isTrashOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-2xl p-6 rounded-2xl border border-dark-700 bg-dark-800 shadow-2xl relative max-h-[80vh] flex flex-col">
             <button 
               onClick={() => setIsTrashOpen(false)}
