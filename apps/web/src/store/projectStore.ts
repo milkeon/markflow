@@ -9,6 +9,7 @@ export interface Project {
   createdAt: string;
   role: 'owner' | 'member';
   deletedAt?: string | null;
+  invitedMembers?: string[];
 }
 
 interface Toast {
@@ -157,7 +158,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!res.ok) throw new Error(data.error || '프로젝트 이름 변경에 실패했습니다.');
 
       await get().fetchProjects();
-      // 현재 선택된 프로젝트 갱신
       const current = get().currentProject;
       if (current && current.id === projectId) {
         set({ currentProject: { ...current, name: newName } });
@@ -165,9 +165,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast('프로젝트 이름이 변경되었습니다.', 'success');
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      get().showToast(err.message, 'error');
-      return false;
+      const updatedProjects = getLocalProjects().map((project) => (
+        project.id === projectId ? { ...project, name: newName } : project
+      ));
+      setLocalProjects(updatedProjects);
+      const current = get().currentProject;
+      if (current && current.id === projectId) {
+        set({ currentProject: { ...current, name: newName } });
+      }
+      set({ projects: updatedProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      get().showToast('로컬 프로젝트 이름을 변경했습니다.', 'success');
+      return true;
     }
   },
 
@@ -189,9 +197,23 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast('프로젝트를 휴지통으로 이동했습니다.', 'success');
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      get().showToast(err.message, 'error');
-      return false;
+      const deletedAt = new Date().toISOString();
+      const updatedProjects = getLocalProjects().map((project) => (
+        project.id === projectId ? { ...project, deletedAt } : project
+      ));
+      setLocalProjects(updatedProjects);
+      const current = get().currentProject;
+      if (current && current.id === projectId) {
+        set({ currentProject: null });
+      }
+      set({
+        projects: updatedProjects.filter((project) => !project.deletedAt),
+        trashProjects: updatedProjects.filter((project) => !!project.deletedAt),
+        isLoading: false,
+        error: null
+      });
+      get().showToast('로컬 프로젝트를 휴지통으로 이동했습니다.', 'success');
+      return true;
     }
   },
 
@@ -209,9 +231,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast(data.message || '멤버를 초대했습니다.', 'success');
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      get().showToast(err.message, 'error');
-      return false;
+      const updatedProjects = getLocalProjects().map((project) => {
+        if (project.id !== projectId) return project;
+        const invitedMembers = Array.from(new Set([...(project.invitedMembers || []), email]));
+        return { ...project, invitedMembers };
+      });
+      setLocalProjects(updatedProjects);
+      set({ projects: updatedProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      get().showToast('로컬 프로젝트에 멤버 초대를 기록했습니다.', 'success');
+      return true;
     }
   },
 
@@ -225,7 +253,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!res.ok) throw new Error(data.error || '휴지통 조회를 실패했습니다.');
       set({ trashProjects: data, isLoading: false });
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      const localTrash = getLocalProjects().filter((project) => !!project.deletedAt);
+      set({ trashProjects: localTrash, isLoading: false, error: null });
     }
   },
 
@@ -244,9 +273,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast('프로젝트가 정상적으로 복구되었습니다.', 'success');
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      get().showToast(err.message, 'error');
-      return false;
+      const updatedProjects = getLocalProjects().map((project) => (
+        project.id === projectId ? { ...project, deletedAt: null } : project
+      ));
+      setLocalProjects(updatedProjects);
+      set({
+        projects: updatedProjects.filter((project) => !project.deletedAt),
+        trashProjects: updatedProjects.filter((project) => !!project.deletedAt),
+        isLoading: false,
+        error: null
+      });
+      get().showToast('로컬 프로젝트를 복구했습니다.', 'success');
+      return true;
     }
   }
 }));
