@@ -1,33 +1,53 @@
-# 환경변수
-.env
-.env.local
-.env.development
-.env.production
-.env.*.local
-
-# 의존성
+# ───────── Dependencies ─────────
 node_modules/
+.pnpm-store/
+.npm/
+.yarn/
 
-# 빌드 결과물
+# ───────── Build output ─────────
 dist/
 build/
+out/
+*.tsbuildinfo
+.vite/
+apps/web/dist/
+apps/api/dist/
 
-# OS 파일
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# 로그
+# ───────── Cache ─────────
+.turbo/
+.cache/
+.eslintcache
+coverage/
 *.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
 
-# AI / 에디터 개인 설정
-.cursorrules
-memory.md
-.cursor/
-.vscode/
+# ───────── Env / secrets ─────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+secrets/
 
-# SQLite DB (로컬 개발용 - 실제 데이터 포함 금지)
+# ───────── Prisma ─────────
+# 생성된 클라이언트(커스텀 output 사용 시) · 로컬 DB 파일
+apps/api/prisma/generated/
 *.db
 *.db-journal
-*.db-wal
-*.db-shm
+
+# ───────── Claude Code / 로컬 툴 상태 ─────────
+.claude/settings.local.json
+# oh-my-claudecode 로컬 상태 (세션·노트패드·플랜 등)
+.omc/
+
+# ───────── Editor / OS ─────────
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
