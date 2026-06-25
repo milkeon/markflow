@@ -1,3 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#f4f5f7] text-[#172b4d] font-sans antialiased overflow-hidden select-none;
+    background-color: #f4f5f7; /* fallback */
+  }
+
+  /* Custom Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-[#f4f5f7];
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
+  }
+}
+
+/* React Flow customization */
+.react-flow__background {
+  background-color: #f4f5f7;
+}
+
+.react-flow__minimap {
+  @apply bg-white border border-gray-200/80 rounded-xl overflow-hidden shadow-xl !important;
+}
+
+.react-flow__controls {
+  @apply border border-gray-200/80 rounded-xl overflow-hidden shadow-lg !important;
+}
+
+.react-flow__controls-button {
+  @apply bg-white text-gray-600 border-b border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors !important;
+}
+
+.react-flow__controls-button:last-child {
+  @apply border-none !important;
+}
+
+.react-flow__edge-path {
+  stroke: #a0aec0 !important;
+  stroke-width: 2 !important;
+  transition: stroke 0.15s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #00875a !important; /* 포레스트 그린 */
+  stroke-width: 3 !important;
+}
+
+/* markdown editor customization for light mode */
+.w-md-editor {
+  background-color: #ffffff !important;
+  color: #172b4d !important;
+  border: 1px solid #e1e4e8 !important;
+}
+
+.w-md-editor-toolbar {
+  background-color: #f4f5f7 !important;
+  border-bottom: 1px solid #e1e4e8 !important;
+}
+
+.w-md-editor-toolbar button {
+  color: #4a5568 !important;
+}
+
+.w-md-editor-toolbar button:hover {
+  color: #000000 !important;
+  background-color: #e1e4e8 !important;
+}
+
+.w-md-editor-content {
+  background-color: #ffffff !important;
+}
+
+.w-md-editor-text {
+  color: #172b4d !important;
+}
+
+.w-md-editor-preview {
+  background-color: #ffffff !important;
+  border-left: 1px solid #e1e4e8 !important;
+  color: #172b4d !important;
+}
