@@ -62,7 +62,21 @@ const setLocalProjects = (projects: Project[]) => {
   localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
 };
 
-const getCurrentUserId = () => useAuthStore.getState().user?.id || 'local-user';
+const getCurrentUser = () => useAuthStore.getState().user;
+const getCurrentUserId = () => getCurrentUser()?.id || 'local-user';
+
+const isVisibleToCurrentUser = (project: Project) => {
+  const user = getCurrentUser();
+  if (!user) return false;
+  if (project.ownerId === user.id) return true;
+  return Boolean(user.email && project.invitedMembers?.includes(user.email));
+};
+
+const toVisibleProject = (project: Project): Project => {
+  const user = getCurrentUser();
+  const role: Project['role'] = user && project.ownerId === user.id ? 'owner' : 'member';
+  return { ...project, role };
+};
 
 const getAuthHeader = () => {
   const token = useAuthStore.getState().token;
@@ -110,7 +124,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!res.ok) throw new Error(data.error || '프로젝트 목록을 가져오지 못했습니다.');
       set({ projects: data, isLoading: false });
     } catch (err: any) {
-      const localProjects = getLocalProjects().filter((project) => !project.deletedAt);
+      const localProjects = getLocalProjects()
+        .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+        .map(toVisibleProject);
       set({ projects: localProjects, isLoading: false, error: null });
     }
   },
@@ -140,7 +156,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       };
       const localProjects = [...getLocalProjects(), newProject];
       setLocalProjects(localProjects);
-      set({ projects: localProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      set({
+        projects: localProjects
+          .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+          .map(toVisibleProject),
+        isLoading: false,
+        error: null
+      });
       get().showToast('로컬 테스트 프로젝트가 생성되었습니다.', 'success');
       return true;
     }
@@ -173,7 +195,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (current && current.id === projectId) {
         set({ currentProject: { ...current, name: newName } });
       }
-      set({ projects: updatedProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      set({
+        projects: updatedProjects
+          .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+          .map(toVisibleProject),
+        isLoading: false,
+        error: null
+      });
       get().showToast('로컬 프로젝트 이름을 변경했습니다.', 'success');
       return true;
     }
@@ -207,8 +235,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         set({ currentProject: null });
       }
       set({
-        projects: updatedProjects.filter((project) => !project.deletedAt),
-        trashProjects: updatedProjects.filter((project) => !!project.deletedAt),
+        projects: updatedProjects
+          .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+          .map(toVisibleProject),
+        trashProjects: updatedProjects
+          .filter((project) => !!project.deletedAt && project.ownerId === getCurrentUserId())
+          .map(toVisibleProject),
         isLoading: false,
         error: null
       });
@@ -237,7 +269,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         return { ...project, invitedMembers };
       });
       setLocalProjects(updatedProjects);
-      set({ projects: updatedProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      set({
+        projects: updatedProjects
+          .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+          .map(toVisibleProject),
+        isLoading: false,
+        error: null
+      });
       get().showToast('로컬 프로젝트에 멤버 초대를 기록했습니다.', 'success');
       return true;
     }
@@ -253,7 +291,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!res.ok) throw new Error(data.error || '휴지통 조회를 실패했습니다.');
       set({ trashProjects: data, isLoading: false });
     } catch (err: any) {
-      const localTrash = getLocalProjects().filter((project) => !!project.deletedAt);
+      const localTrash = getLocalProjects()
+        .filter((project) => !!project.deletedAt && project.ownerId === getCurrentUserId())
+        .map(toVisibleProject);
       set({ trashProjects: localTrash, isLoading: false, error: null });
     }
   },
@@ -278,8 +318,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ));
       setLocalProjects(updatedProjects);
       set({
-        projects: updatedProjects.filter((project) => !project.deletedAt),
-        trashProjects: updatedProjects.filter((project) => !!project.deletedAt),
+        projects: updatedProjects
+          .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+          .map(toVisibleProject),
+        trashProjects: updatedProjects
+          .filter((project) => !!project.deletedAt && project.ownerId === getCurrentUserId())
+          .map(toVisibleProject),
         isLoading: false,
         error: null
       });
