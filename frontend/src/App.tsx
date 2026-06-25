@@ -11,13 +11,29 @@ import { Toast } from './components/Toast.js';
 
 function App() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore();
-  const { currentProject } = useProjectStore();
+  const { currentProject, fetchProjects, selectProject } = useProjectStore();
   const { clearCanvas } = useCanvasStore();
   const [showLogin, setShowLogin] = useState(false);
 
-  // 최초 로드 시 로그인 세션 확인
+  // 최초 로드 시 로그인 세션 확인 및 마지막 프로젝트 복원
   useEffect(() => {
-    checkAuth();
+    const restore = async () => {
+      await checkAuth();
+      const { isAuthenticated: authed } = useAuthStore.getState();
+      if (!authed) return;
+
+      // 프로젝트 목록 로드 후 마지막 프로젝트 복원
+      await fetchProjects();
+      const lastId = localStorage.getItem('lastProjectId');
+      if (lastId) {
+        const { projects } = useProjectStore.getState();
+        const found = projects.find(p => p.id === lastId && !p.deletedAt);
+        if (found) {
+          selectProject(found);
+        }
+      }
+    };
+    restore();
   }, []);
 
   // 프로젝트 전환/이탈 시 캔버스 스토어 정리

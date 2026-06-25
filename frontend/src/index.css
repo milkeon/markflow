@@ -6,8 +6,8 @@
 
 @layer base {
   body {
-    @apply bg-dark-900 text-dark-100 font-sans antialiased overflow-hidden select-none;
-    background-color: #121214; /* fallback */
+    @apply bg-[#f4f5f7] text-[#172b4d] font-sans antialiased overflow-hidden select-none;
+    background-color: #f4f5f7; /* fallback */
   }
 
   /* Custom Scrollbars */
@@ -16,30 +16,28 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-dark-900;
+    @apply bg-[#f4f5f7];
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-dark-700 rounded-full hover:bg-dark-600 transition-colors;
+    @apply bg-gray-300 rounded-full hover:bg-gray-400 transition-colors;
   }
 }
 
 /* React Flow customization */
 .react-flow__background {
-  background-color: #121214;
+  background-color: #f4f5f7;
 }
 
 .react-flow__minimap {
-  @apply bg-dark-800 border border-dark-700 rounded-lg overflow-hidden shadow-2xl;
-  background-color: #1b1b1f !important;
+  @apply bg-white border border-gray-200/80 rounded-xl overflow-hidden shadow-xl !important;
 }
 
 .react-flow__controls {
-  @apply border border-dark-700 rounded-lg overflow-hidden shadow-xl;
-  background-color: #1b1b1f !important;
+  @apply border border-gray-200/80 rounded-xl overflow-hidden shadow-lg !important;
 }
 
 .react-flow__controls-button {
-  @apply bg-dark-800 text-dark-300 border-b border-dark-700 hover:bg-dark-700 hover:text-white transition-colors !important;
+  @apply bg-white text-gray-600 border-b border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors !important;
 }
 
 .react-flow__controls-button:last-child {
@@ -47,47 +45,47 @@
 }
 
 .react-flow__edge-path {
-  stroke: #4f4f4f !important;
+  stroke: #a0aec0 !important;
   stroke-width: 2 !important;
   transition: stroke 0.15s ease;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #39ff14 !important; /* 네온 초록 */
+  stroke: #00875a !important; /* 포레스트 그린 */
   stroke-width: 3 !important;
 }
 
-/* markdown editor customization for dark mode */
+/* markdown editor customization for light mode */
 .w-md-editor {
-  background-color: #1b1b1f !important;
-  color: #e7e7e7 !important;
-  border: 1px solid #4f4f4f !important;
+  background-color: #ffffff !important;
+  color: #172b4d !important;
+  border: 1px solid #e1e4e8 !important;
 }
 
 .w-md-editor-toolbar {
-  background-color: #121214 !important;
-  border-bottom: 1px solid #4f4f4f !important;
+  background-color: #f4f5f7 !important;
+  border-bottom: 1px solid #e1e4e8 !important;
 }
 
 .w-md-editor-toolbar button {
-  color: #b0b0b0 !important;
+  color: #4a5568 !important;
 }
 
 .w-md-editor-toolbar button:hover {
-  color: #ffffff !important;
-  background-color: #4f4f4f !important;
+  color: #000000 !important;
+  background-color: #e1e4e8 !important;
 }
 
 .w-md-editor-content {
-  background-color: #1b1b1f !important;
+  background-color: #ffffff !important;
 }
 
 .w-md-editor-text {
-  color: #e7e7e7 !important;
+  color: #172b4d !important;
 }
 
 .w-md-editor-preview {
-  background-color: #1b1b1f !important;
-  border-left: 1px solid #4f4f4f !important;
-  color: #e7e7e7 !important;
+  background-color: #ffffff !important;
+  border-left: 1px solid #e1e4e8 !important;
+  color: #172b4d !important;
 }

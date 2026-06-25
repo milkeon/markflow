@@ -14,10 +14,14 @@ const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
 
 // 회원가입
 router.post('/register', async (req, res): Promise<any> => {
-  const { email, password } = req.body;
+  const { email, password, nickname } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: '이메일과 비밀번호를 입력해주세요.' });
+  if (!email || !password || !nickname) {
+    return res.status(400).json({ error: '이메일, 비밀번호, 닉네임을 모두 입력해주세요.' });
+  }
+
+  if (nickname.trim().length < 2) {
+    return res.status(400).json({ error: '닉네임은 최소 2자 이상 입력해주세요.' });
   }
 
   if (!emailRegex.test(email)) {
@@ -45,13 +49,14 @@ router.post('/register', async (req, res): Promise<any> => {
     const user = await prisma.user.create({
       data: {
         email,
+        nickname: nickname.trim(),
         passwordHash
       }
     });
 
     return res.status(201).json({
       message: '회원가입이 완료되었습니다. 로그인을 진행해주세요.',
-      user: { id: user.id, email: user.email }
+      user: { id: user.id, email: user.email, nickname: user.nickname }
     });
 
   } catch (error) {
@@ -86,7 +91,7 @@ router.post('/login', async (req, res): Promise<any> => {
 
     // JWT 서명 및 반환
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { id: user.id, email: user.email, nickname: user.nickname },
       JWT_SECRET,
       { expiresIn: '7d' } // 7일 유효
     );
@@ -94,7 +99,7 @@ router.post('/login', async (req, res): Promise<any> => {
     return res.json({
       message: '로그인에 성공했습니다.',
       token,
-      user: { id: user.id, email: user.email }
+      user: { id: user.id, email: user.email, nickname: user.nickname }
     });
 
   } catch (error) {
@@ -106,6 +111,35 @@ router.post('/login', async (req, res): Promise<any> => {
 // 현재 로그인 유저 정보 조회
 router.get('/me', authenticateToken, (req: AuthRequest, res) => {
   return res.json({ user: req.user });
+});
+
+// 프로필(닉네임) 수정
+router.put('/profile', authenticateToken, async (req: AuthRequest, res): Promise<any> => {
+  const { nickname } = req.body;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ error: '인증되지 않은 사용자입니다.' });
+  }
+
+  if (!nickname || nickname.trim().length < 2) {
+    return res.status(400).json({ error: '닉네임은 2자 이상 입력해주세요.' });
+  }
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { nickname: nickname.trim() }
+    });
+
+    return res.json({
+      message: '프로필이 수정되었습니다.',
+      user: { id: updatedUser.id, email: updatedUser.email, nickname: updatedUser.nickname }
+    });
+  } catch (error) {
+    console.error('프로필 수정 중 오류:', error);
+    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+  }
 });
 
 export default router;

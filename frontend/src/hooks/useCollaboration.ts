@@ -8,6 +8,7 @@ import type { Node, Edge } from '@xyflow/react';
 
 export interface Cursor {
   email: string;
+  nickname: string;
   x: number;
   y: number;
 }
@@ -16,6 +17,7 @@ export interface ChatMessage {
   id: string;
   userId: string;
   email: string;
+  nickname: string;
   content: string;
   createdAt: string;
 }
@@ -59,7 +61,8 @@ export const useCollaboration = () => {
     // 프로젝트 룸 조인
     socket.emit('join-project', {
       projectId: currentProject.id,
-      email: user.email
+      email: user.email,
+      nickname: user.nickname
     });
 
     // 백엔드 대화 이력 API 호출
@@ -92,10 +95,10 @@ export const useCollaboration = () => {
       console.log('실시간 협업 서버 연결 해제');
     });
 
-    socket.on('cursor-update', ({ socketId, email, x, y }) => {
+    socket.on('cursor-update', ({ socketId, email, nickname, x, y }) => {
       setCursors(prev => ({
         ...prev,
-        [socketId]: { email, x, y }
+        [socketId]: { email, nickname, x, y }
       }));
     });
 
@@ -108,11 +111,21 @@ export const useCollaboration = () => {
     });
 
     socket.on('nodes-update', (updatedNodes: Node<MarkdownNodeData>[]) => {
+      const store = useCanvasStore.getState();
+      store.setIncomingUpdate(true);
       useCanvasStore.setState({ nodes: updatedNodes });
+      setTimeout(() => {
+        useCanvasStore.getState().setIncomingUpdate(false);
+      }, 50);
     });
 
     socket.on('edges-update', (updatedEdges: Edge[]) => {
+      const store = useCanvasStore.getState();
+      store.setIncomingUpdate(true);
       useCanvasStore.setState({ edges: updatedEdges });
+      setTimeout(() => {
+        useCanvasStore.getState().setIncomingUpdate(false);
+      }, 50);
     });
 
     socket.on('node-locked', ({ nodeId, email }) => {
@@ -135,7 +148,8 @@ export const useCollaboration = () => {
     return () => {
       socket.emit('leave-project', {
         projectId: currentProject.id,
-        email: user.email
+        email: user.email,
+        nickname: user.nickname
       });
       socket.disconnect();
       socketRef.current = null;
@@ -173,7 +187,8 @@ export const useCollaboration = () => {
         projectId: currentProject.id,
         x,
         y,
-        email: user.email
+        email: user.email,
+        nickname: user.nickname
       });
       lastCursorEmitRef.current = now;
     }
@@ -206,6 +221,7 @@ export const useCollaboration = () => {
         projectId: currentProject.id,
         userId: user.id,
         email: user.email,
+        nickname: user.nickname,
         content
       });
     }

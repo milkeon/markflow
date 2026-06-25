@@ -4,6 +4,7 @@ import { create } from 'zustand';
 export interface User {
   id: string;
   email: string;
+  nickname: string;
 }
 
 interface AuthState {
@@ -16,11 +17,13 @@ interface AuthState {
   // 로그인
   login: (email: string, password: string) => Promise<boolean>;
   // 회원가입
-  register: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  register: (email: string, password: string, nickname: string) => Promise<{ success: boolean; message: string }>;
   // 로그아웃
   logout: () => void;
   // 세션 복구
   checkAuth: () => Promise<void>;
+  // 프로필 수정
+  updateProfile: (nickname: string) => Promise<boolean>;
   // 에러 초기화
   clearError: () => void;
 }
@@ -62,13 +65,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (email, password) => {
+  register: async (email, password, nickname) => {
     set({ isLoading: true, error: null });
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, nickname })
       });
       const data = await res.json();
 
@@ -120,6 +123,35 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: false,
         isLoading: false
       });
+    }
+  },
+
+  updateProfile: async (nickname) => {
+    set({ isLoading: true, error: null });
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ nickname })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || '프로필 수정에 실패했습니다.');
+      }
+
+      set({
+        user: data.user,
+        isLoading: false
+      });
+      return true;
+    } catch (err: any) {
+      set({ error: err.message, isLoading: false });
+      return false;
     }
   },
 

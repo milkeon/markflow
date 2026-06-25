@@ -8,6 +8,7 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
+    nickname: string;
   };
 }
 
@@ -25,10 +26,11 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     }
     
     // 토큰 해석 정보 저장
-    const payload = decoded as { id: string; email: string };
+    const payload = decoded as { id: string; email: string; nickname: string };
     req.user = {
       id: payload.id,
-      email: payload.email
+      email: payload.email,
+      nickname: payload.nickname || ''
     };
     next();
   });

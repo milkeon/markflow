@@ -74,7 +74,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   clearToast: () => set({ toast: null }),
 
-  selectProject: (project) => set({ currentProject: project }),
+  selectProject: (project) => {
+    // 새로고침 후 복원을 위해 localStorage에 현재 프로젝트 ID 기록
+    if (project) {
+      localStorage.setItem('lastProjectId', project.id);
+    } else {
+      localStorage.removeItem('lastProjectId');
+    }
+    set({ currentProject: project });
+  },
 
   fetchProjects: async () => {
     set({ isLoading: true, error: null });

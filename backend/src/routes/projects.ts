@@ -398,7 +398,8 @@ router.get('/:projectId/messages', async (req: AuthRequest, res: Response): Prom
       include: {
         user: {
           select: {
-            email: true
+            email: true,
+            nickname: true
           }
         }
       },
@@ -412,6 +413,7 @@ router.get('/:projectId/messages', async (req: AuthRequest, res: Response): Prom
       projectId: msg.projectId,
       userId: msg.userId,
       email: msg.user.email,
+      nickname: msg.user.nickname,
       content: msg.content,
       createdAt: msg.createdAt
     })));

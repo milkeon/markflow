@@ -51,17 +51,17 @@ io.on('connection', (socket) => {
   console.log(`소켓 연결 성공: ${socket.id}`);
 
   // 프로젝트 협업 룸 가입
-  socket.on('join-project', ({ projectId, email }) => {
+  socket.on('join-project', ({ projectId, email, nickname }) => {
     socket.join(projectId);
-    console.log(`사용자 [${email}]이(가) 프로젝트 룸 [${projectId}]에 참가했습니다. (소켓 ID: ${socket.id})`);
+    console.log(`사용자 [${email}(${nickname})]이(가) 프로젝트 룸 [${projectId}]에 참가했습니다. (소켓 ID: ${socket.id})`);
     
     // 새 멤버 참가 브로드캐스트 (알림용)
-    socket.to(projectId).emit('member-joined', { email });
+    socket.to(projectId).emit('member-joined', { email, nickname });
   });
 
   // 1. 실시간 마우스 커서 좌표 공유 (50ms 쓰로틀링으로 수신)
-  socket.on('cursor-move', ({ projectId, x, y, email }) => {
-    socket.to(projectId).emit('cursor-update', { socketId: socket.id, email, x, y });
+  socket.on('cursor-move', ({ projectId, x, y, email, nickname }) => {
+    socket.to(projectId).emit('cursor-update', { socketId: socket.id, email, nickname, x, y });
   });
 
   // 2. 실시간 노드 동기화 (최종 수정자 우선)
@@ -87,7 +87,7 @@ io.on('connection', (socket) => {
   });
 
   // 6. 실시간 채팅 수신 및 DB 영속화
-  socket.on('chat-message', async ({ projectId, userId, email, content }) => {
+  socket.on('chat-message', async ({ projectId, userId, email, nickname, content }) => {
     if (!content || content.trim() === '') return;
 
     try {
@@ -104,6 +104,7 @@ io.on('connection', (socket) => {
         projectId,
         userId,
         email,
+        nickname,
         content: message.content,
         createdAt: message.createdAt
       });
