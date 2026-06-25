@@ -47,6 +47,21 @@ interface ProjectState {
 }
 
 const API_URL = 'http://localhost:5000/api';
+const LOCAL_PROJECTS_KEY = 'markflow.localProjects';
+
+const getLocalProjects = (): Project[] => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_PROJECTS_KEY) || '[]') as Project[];
+  } catch {
+    return [];
+  }
+};
+
+const setLocalProjects = (projects: Project[]) => {
+  localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
+};
+
+const getCurrentUserId = () => useAuthStore.getState().user?.id || 'local-user';
 
 const getAuthHeader = () => {
   const token = useAuthStore.getState().token;
@@ -94,7 +109,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!res.ok) throw new Error(data.error || '프로젝트 목록을 가져오지 못했습니다.');
       set({ projects: data, isLoading: false });
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      const localProjects = getLocalProjects().filter((project) => !project.deletedAt);
+      set({ projects: localProjects, isLoading: false, error: null });
     }
   },
 
@@ -113,9 +129,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast('새 프로젝트가 성공적으로 생성되었습니다.', 'success');
       return true;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
-      get().showToast(err.message, 'error');
-      return false;
+      const newProject: Project = {
+        id: crypto.randomUUID(),
+        name,
+        ownerId: getCurrentUserId(),
+        createdAt: new Date().toISOString(),
+        role: 'owner',
+        deletedAt: null
+      };
+      const localProjects = [...getLocalProjects(), newProject];
+      setLocalProjects(localProjects);
+      set({ projects: localProjects.filter((project) => !project.deletedAt), isLoading: false, error: null });
+      get().showToast('로컬 테스트 프로젝트가 생성되었습니다.', 'success');
+      return true;
     }
   },
 
