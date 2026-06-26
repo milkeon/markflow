@@ -17,3 +17,8 @@
 - merge / deploy / 프로덕션 데이터 변경 / `main` 직접 push / force-push (feature 브랜치 push + PR 생성은 허용, merge는 사람 승인)
 - 생성물(migrations, prisma client, dist) 편집
 - 비밀(.env, secrets) 읽기
+
+## 강제 (도구 무관 — Claude·자율 에이전트·사람 모두)
+- 공용 **git hooks**(`.githooks/`, `core.hooksPath`로 등록 — `./scripts/bootstrap`이 자동): pre-commit = `main` 직접 커밋·생성물·비밀·기존 마이그레이션 수정 차단 / pre-push = `main` push 차단 + `./scripts/check`.
+- 최종 방어선은 **GitHub 브랜치 보호 + PR 리뷰** — hook은 `--no-verify`로 우회 가능한 보조 가드다. 우회하지 말 것.
+- Claude Code 전용 `.claude/settings.json` 가드는 다른 에이전트엔 적용되지 않는다 → 위 hook과 브랜치 보호가 공통 강제선이다.
