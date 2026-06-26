@@ -47,8 +47,10 @@ interface ProjectState {
   selectProject: (project: Project | null) => void;
 }
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 const LOCAL_PROJECTS_KEY = 'markflow.localProjects';
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 const getLocalProjects = (): Project[] => {
   try {
@@ -62,20 +64,59 @@ const setLocalProjects = (projects: Project[]) => {
   localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
 };
 
+const upsertLocalProject = (project: Project) => {
+  const projects = getLocalProjects();
+  const exists = projects.some((item) => item.id === project.id);
+  const updated = exists
+    ? projects.map((item) => (item.id === project.id ? { ...item, ...project } : item))
+    : [...projects, project];
+  setLocalProjects(updated);
+  return updated;
+};
+
+const updateLocalProject = (projectId: string, updater: (project: Project) => Project) => {
+  const updated = getLocalProjects().map((project) => (project.id === projectId ? updater(project) : project));
+  setLocalProjects(updated);
+  return updated;
+};
+
 const getCurrentUser = () => useAuthStore.getState().user;
 const getCurrentUserId = () => getCurrentUser()?.id || 'local-user';
 
 const isVisibleToCurrentUser = (project: Project) => {
   const user = getCurrentUser();
   if (!user) return false;
+  const currentEmail = normalizeEmail(user.email);
   if (project.ownerId === user.id) return true;
-  return Boolean(user.email && project.invitedMembers?.includes(user.email));
+  return Boolean(currentEmail && project.invitedMembers?.some((email) => normalizeEmail(email) === currentEmail));
 };
 
 const toVisibleProject = (project: Project): Project => {
   const user = getCurrentUser();
   const role: Project['role'] = user && project.ownerId === user.id ? 'owner' : 'member';
   return { ...project, role };
+};
+
+const mergeVisibleProjects = (remoteProjects: Project[]) => {
+  const localProjects = getLocalProjects();
+  const localById = new Map(localProjects.map((project) => [project.id, project]));
+  const merged = remoteProjects.map((project) => {
+    const local = localById.get(project.id);
+    if (!local) return project;
+
+    return {
+      ...project,
+      deletedAt: project.deletedAt ?? local.deletedAt ?? null,
+      invitedMembers: Array.from(new Set([...(project.invitedMembers || []).map(normalizeEmail), ...(local.invitedMembers || []).map(normalizeEmail)]))
+    };
+  });
+
+  const remoteIds = new Set(remoteProjects.map((project) => project.id));
+  const localOnly = localProjects.filter((project) => !remoteIds.has(project.id));
+
+  return [...merged, ...localOnly]
+    .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
+    .map(toVisibleProject);
 };
 
 const getAuthHeader = () => {
@@ -122,7 +163,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로젝트 목록을 가져오지 못했습니다.');
-      set({ projects: data, isLoading: false });
+      set({ projects: mergeVisibleProjects(data), isLoading: false, error: null });
     } catch (err: any) {
       const localProjects = getLocalProjects()
         .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
@@ -142,6 +183,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로젝트 생성에 실패했습니다.');
       
+      const createdAt = data.project?.createdAt || new Date().toISOString();
+      upsertLocalProject({
+        id: data.project?.id || crypto.randomUUID(),
+        name,
+        ownerId: getCurrentUserId(),
+        createdAt,
+        role: 'owner',
+        deletedAt: null,
+        invitedMembers: []
+      });
       await get().fetchProjects();
       get().showToast('새 프로젝트가 성공적으로 생성되었습니다.', 'success');
       return true;
@@ -154,8 +205,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         role: 'owner',
         deletedAt: null
       };
-      const localProjects = [...getLocalProjects(), newProject];
-      setLocalProjects(localProjects);
+      const localProjects = upsertLocalProject(newProject);
       set({
         projects: localProjects
           .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
@@ -179,6 +229,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로젝트 이름 변경에 실패했습니다.');
 
+      updateLocalProject(projectId, (project) => ({ ...project, name: newName }));
       await get().fetchProjects();
       const current = get().currentProject;
       if (current && current.id === projectId) {
@@ -187,10 +238,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().showToast('프로젝트 이름이 변경되었습니다.', 'success');
       return true;
     } catch (err: any) {
-      const updatedProjects = getLocalProjects().map((project) => (
-        project.id === projectId ? { ...project, name: newName } : project
-      ));
-      setLocalProjects(updatedProjects);
+      const updatedProjects = updateLocalProject(projectId, (project) => ({ ...project, name: newName }));
       const current = get().currentProject;
       if (current && current.id === projectId) {
         set({ currentProject: { ...current, name: newName } });
@@ -217,6 +265,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로젝트 삭제에 실패했습니다.');
 
+      updateLocalProject(projectId, (project) => ({ ...project, deletedAt: new Date().toISOString() }));
       await get().fetchProjects();
       const current = get().currentProject;
       if (current && current.id === projectId) {
@@ -226,10 +275,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return true;
     } catch (err: any) {
       const deletedAt = new Date().toISOString();
-      const updatedProjects = getLocalProjects().map((project) => (
-        project.id === projectId ? { ...project, deletedAt } : project
-      ));
-      setLocalProjects(updatedProjects);
+      const updatedProjects = updateLocalProject(projectId, (project) => ({ ...project, deletedAt }));
       const current = get().currentProject;
       if (current && current.id === projectId) {
         set({ currentProject: null });
@@ -250,25 +296,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   inviteMember: async (projectId, email) => {
+    const normalizedEmail = normalizeEmail(email);
     set({ isLoading: true, error: null });
     try {
       const res = await fetch(`${API_URL}/projects/${projectId}/invite`, {
         method: 'POST',
         headers: getAuthHeader(),
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: normalizedEmail })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '멤버 초대에 실패했습니다.');
 
+      updateLocalProject(projectId, (project) => ({
+        ...project,
+        invitedMembers: Array.from(new Set([...(project.invitedMembers || []).map(normalizeEmail), normalizedEmail]))
+      }));
+      await get().fetchProjects();
       get().showToast(data.message || '멤버를 초대했습니다.', 'success');
       return true;
     } catch (err: any) {
-      const updatedProjects = getLocalProjects().map((project) => {
-        if (project.id !== projectId) return project;
-        const invitedMembers = Array.from(new Set([...(project.invitedMembers || []), email]));
-        return { ...project, invitedMembers };
-      });
-      setLocalProjects(updatedProjects);
+      const updatedProjects = updateLocalProject(projectId, (project) => ({
+        ...project,
+        invitedMembers: Array.from(new Set([...(project.invitedMembers || []).map(normalizeEmail), normalizedEmail]))
+      }));
       set({
         projects: updatedProjects
           .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))
@@ -308,15 +358,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로젝트 복구에 실패했습니다.');
 
+      updateLocalProject(projectId, (project) => ({ ...project, deletedAt: null }));
       await get().fetchTrashProjects();
       await get().fetchProjects();
       get().showToast('프로젝트가 정상적으로 복구되었습니다.', 'success');
       return true;
     } catch (err: any) {
-      const updatedProjects = getLocalProjects().map((project) => (
-        project.id === projectId ? { ...project, deletedAt: null } : project
-      ));
-      setLocalProjects(updatedProjects);
+      const updatedProjects = updateLocalProject(projectId, (project) => ({ ...project, deletedAt: null }));
       set({
         projects: updatedProjects
           .filter((project) => !project.deletedAt && isVisibleToCurrentUser(project))

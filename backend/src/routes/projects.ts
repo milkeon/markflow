@@ -69,8 +69,8 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<any> => {
         }
       });
 
-      // 캔버스 초기 데이터 생성 (비어있는 {nodes: [], edges: []} 문자열)
-      const initialCanvasData = JSON.stringify({ nodes: [], edges: [] });
+      // 캔버스 초기 데이터 생성 (비어있는 {nodes: [], edges: [], trashNodes: []} 문자열)
+      const initialCanvasData = JSON.stringify({ nodes: [], edges: [], trashNodes: [] });
       await tx.canvas.create({
         data: {
           projectId: project.id,

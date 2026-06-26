@@ -28,6 +28,7 @@ export interface MarkdownNodeData extends Record<string, any> {
 
 interface CanvasState {
   nodes: Node<MarkdownNodeData>[];
+  trashNodes: Node<MarkdownNodeData>[];
   edges: Edge[];
   isLoading: boolean;
   isSaving: boolean;
@@ -58,7 +59,7 @@ interface CanvasState {
   clearCanvas: () => void;
 }
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 const getAuthHeaders = () => {
   const token = useAuthStore.getState().token;
@@ -70,6 +71,7 @@ const getAuthHeaders = () => {
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: [],
+  trashNodes: [],
   edges: [],
   isLoading: false,
   isSaving: false,
@@ -86,27 +88,32 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '캔버스를 불러오지 못했습니다.');
 
-      const canvasData = data.data || { nodes: [], edges: [] };
+      const canvasData = data.data || { nodes: [], edges: [], trashNodes: [] };
+      const incomingNodes = Array.isArray(canvasData.nodes) ? canvasData.nodes : [];
+      const incomingTrashNodes = Array.isArray(canvasData.trashNodes) ? canvasData.trashNodes : [];
+      const migratedTrashNodes = incomingNodes.filter((node: any) => node?.data?.deletedAt !== undefined);
+      const activeNodes = incomingNodes.filter((node: any) => node?.data?.deletedAt === undefined);
       set({
-        nodes: canvasData.nodes || [],
+        nodes: activeNodes,
+        trashNodes: [...incomingTrashNodes, ...migratedTrashNodes],
         edges: canvasData.edges || [],
         isLoading: false
       });
     } catch (err: any) {
       console.error(err.message);
-      set({ nodes: [], edges: [], isLoading: false });
+      set({ nodes: [], trashNodes: [], edges: [], isLoading: false });
     }
   },
 
   saveCanvas: async (projectId) => {
     set({ isSaving: true });
-    const { nodes, edges } = get();
+    const { nodes, edges, trashNodes } = get();
     try {
       const res = await fetch(`${API_URL}/projects/${projectId}/canvas`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          data: { nodes, edges }
+          data: { nodes, edges, trashNodes }
         })
       });
       const data = await res.json();
@@ -132,14 +139,40 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   onNodesChange: (changes) => {
     set((state) => {
-      const updatedNodes = applyNodeChanges(changes, state.nodes) as Node<MarkdownNodeData>[];
+      const removeIds = changes
+        .filter((change: any) => change.type === 'remove')
+        .map((change: any) => change.id);
+      const nonRemoveChanges = changes.filter((change: any) => change.type !== 'remove');
+      let updatedNodes = applyNodeChanges(nonRemoveChanges as any, state.nodes) as Node<MarkdownNodeData>[];
+      let updatedTrashNodes = state.trashNodes;
+
+      if (removeIds.length > 0) {
+        const removedNodes = state.nodes.filter((node) => removeIds.includes(node.id));
+        const removedNodesMap = new Map(removedNodes.map((node) => [node.id, node]));
+        const removedAt = new Date().toISOString();
+
+        updatedNodes = updatedNodes.filter((node) => !removeIds.includes(node.id));
+        updatedTrashNodes = [
+          ...state.trashNodes.filter((node) => !removeIds.includes(node.id)),
+          ...removeIds
+            .map((id) => removedNodesMap.get(id))
+            .filter((node): node is Node<MarkdownNodeData> => !!node)
+            .map((node) => ({
+              ...node,
+              data: {
+                ...node.data,
+                deletedAt: node.data.deletedAt ?? removedAt
+              }
+            }))
+        ];
+      }
 
       const currentProj = useProjectStore.getState().currentProject;
       if (currentProj) {
         setTimeout(() => get().triggerAutoSave(currentProj.id), 0);
       }
 
-      return { nodes: updatedNodes };
+      return { nodes: updatedNodes, trashNodes: updatedTrashNodes };
     });
   },
 
@@ -176,7 +209,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const { nodes } = get();
 
     // 1. 제목 자동 넘버링: 현재 활성 노드 수 + 1
-    const activeCount = nodes.filter(n => n.data.deletedAt === undefined).length;
+    const activeCount = nodes.length;
     const title = `새 노드 ${activeCount + 1}`;
 
     // 2. 위치 충돌 방지: 기존 노드와 충분히 떨어진 위치 탐색 (최소 거리 200px)
@@ -186,9 +219,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     let posY = y;
 
     // 기존 활성 노드 위치 목록
-    const activePositions = nodes
-      .filter(n => n.data.deletedAt === undefined)
-      .map(n => n.position);
+    const activePositions = nodes.map(n => n.position);
 
     // 충돌 체크 함수
     const isTooClose = (cx: number, cy: number) =>
@@ -262,21 +293,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const confirmDelete = window.confirm('이 마크다운 노드를 삭제하시겠습니까?\n삭제된 노드는 휴지통에서 복구할 수 있습니다.');
     if (!confirmDelete) return false;
 
-    set((state) => {
-      const updatedNodes = state.nodes.map((node) => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              deletedAt: new Date().toISOString()
-            }
-          };
-        }
-        return node;
-      });
+    const target = get().nodes.find((node) => node.id === nodeId);
+    if (!target) return false;
 
-      return { nodes: updatedNodes };
+    set((state) => {
+      const deletedNode = {
+        ...target,
+        data: {
+          ...target.data,
+          deletedAt: new Date().toISOString()
+        }
+      };
+
+      return {
+        nodes: state.nodes.filter((node) => node.id !== nodeId),
+        trashNodes: [
+          ...state.trashNodes.filter((node) => node.id !== nodeId),
+          deletedNode
+        ]
+      };
     });
 
     get().triggerAutoSave(currentProj.id);
@@ -285,7 +320,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   getDeletedNodes: () => {
-    return get().nodes.filter(node => node.data.deletedAt !== undefined);
+    return get().trashNodes;
   },
 
   restoreNode: (nodeId) => {
@@ -295,19 +330,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const confirmRestore = window.confirm('삭제된 노드를 복구하시겠습니까?');
     if (!confirmRestore) return false;
 
-    set((state) => {
-      const updatedNodes = state.nodes.map((node) => {
-        if (node.id === nodeId) {
-          const { deletedAt, ...cleanedData } = node.data;
-          return {
-            ...node,
-            data: cleanedData as MarkdownNodeData
-          };
-        }
-        return node;
-      });
+    const target = get().trashNodes.find((node) => node.id === nodeId);
+    if (!target) return false;
 
-      return { nodes: updatedNodes };
+    set((state) => {
+      const { deletedAt, ...cleanedData } = target.data;
+      const restoredNode: Node<MarkdownNodeData> = {
+        ...target,
+        data: cleanedData as MarkdownNodeData
+      };
+
+      return {
+        nodes: [...state.nodes.filter((node) => node.id !== nodeId), restoredNode],
+        trashNodes: state.trashNodes.filter((node) => node.id !== nodeId)
+      };
     });
 
     get().triggerAutoSave(currentProj.id);
@@ -318,6 +354,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   clearCanvas: () => {
     const { saveTimer } = get();
     if (saveTimer) clearTimeout(saveTimer);
-    set({ nodes: [], edges: [], saveTimer: null });
+    set({ nodes: [], trashNodes: [], edges: [], saveTimer: null });
   }
 }));

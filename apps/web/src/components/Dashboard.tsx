@@ -20,6 +20,7 @@ export const Dashboard: React.FC = () => {
     selectProject,
     showToast
   } = useProjectStore();
+  const invitedProjectCount = projects.filter((project) => project.role === 'member').length;
 
   const [newProjectName, setNewProjectName] = useState('');
   const [isTrashOpen, setIsTrashOpen] = useState(false);
@@ -224,6 +225,14 @@ export const Dashboard: React.FC = () => {
               {projects.length}
             </span>
           </h2>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span className="px-2.5 py-1 rounded-full bg-[#e6f4ea] border border-[#00875a]/20 text-[#00875a] font-bold">
+              받은 초대 {invitedProjectCount}
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 font-medium">
+              초대를 받으면 이 목록에 워크스페이스가 표시됩니다.
+            </span>
+          </div>
 
           {isLoading && projects.length === 0 ? (
             // 스케치 로딩 스켈레톤
@@ -233,8 +242,11 @@ export const Dashboard: React.FC = () => {
               ))}
             </div>
           ) : projects.length === 0 ? (
-            <div className="border border-dashed border-gray-300 rounded-2xl p-16 text-center text-gray-400 font-semibold bg-white shadow-sm">
-              워크스페이스가 비어있습니다. 위의 입력창을 이용해 첫 프로젝트를 생성해보세요!
+            <div className="border border-dashed border-gray-300 rounded-2xl p-16 text-center text-gray-400 font-semibold bg-white shadow-sm space-y-2">
+              <div>워크스페이스가 비어있습니다.</div>
+              <div className="text-sm font-medium text-gray-300">
+                새 프로젝트를 생성하거나, 초대를 받으면 여기에 자동으로 표시됩니다.
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -251,9 +263,9 @@ export const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-2 mb-3">
                       <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md border ${project.role === 'owner'
                         ? 'bg-[#e6f4ea] border-[#00875a]/30 text-[#00875a]'
-                        : 'bg-gray-50 border-gray-200 text-gray-500'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
                         }`}>
-                        {project.role === 'owner' ? 'Owner' : 'Member'}
+                        {project.role === 'owner' ? 'Owner' : 'Member · 초대됨'}
                       </span>
                     </div>
                     <h3 className="font-bold text-lg text-gray-900 group-hover:text-[#00875a] transition-colors line-clamp-1">

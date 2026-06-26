@@ -1,5 +1,6 @@
 // frontend/src/components/CanvasWorkspace.tsx
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ReactFlow,
   Background,
@@ -33,6 +34,7 @@ const nodeTypes = {
 const CanvasInner: React.FC = () => {
   const {
     nodes,
+    trashNodes,
     edges,
     isLoading,
     isSaving,
@@ -101,6 +103,9 @@ const CanvasInner: React.FC = () => {
   const modalChatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const modalChatInputRef = useRef<HTMLInputElement>(null);
+  const moreMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const moreMenuPanelRef = useRef<HTMLDivElement>(null);
+  const [moreMenuStyle, setMoreMenuStyle] = useState<React.CSSProperties>({});
 
   // 현재 프로젝트 캔버스 로딩
   useEffect(() => {
@@ -265,7 +270,7 @@ const CanvasInner: React.FC = () => {
   // 소프트 삭제된 노드 목록 캐싱 (임시 저장소 노드들)
   const deletedNodes = useMemo(() => {
     return getDeletedNodes();
-  }, [nodes, getDeletedNodes]);
+  }, [trashNodes, getDeletedNodes]);
 
   const handleAddNode = (category?: 'idea' | 'document' | 'decision' | 'todo' | 'data') => {
     // 현재 뷰포트 중심을 캔버스 좌표로 변환하여 기준 위치로 사용
@@ -355,6 +360,52 @@ const CanvasInner: React.FC = () => {
       // 리액트 플로우 컨테이너 미비 시 예외 방지
     }
   };
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+
+    const updateMoreMenuPosition = () => {
+      const trigger = moreMenuButtonRef.current;
+      const panel = moreMenuPanelRef.current;
+      if (!trigger || !panel) return;
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const gap = 10;
+      const preferredTop = triggerRect.top - panelRect.height - gap;
+      const top = Math.max(8, preferredTop);
+      const left = Math.max(8, window.innerWidth - triggerRect.right);
+
+      setMoreMenuStyle({
+        position: 'fixed',
+        top: `${top}px`,
+        right: `${left}px`,
+        zIndex: 9999,
+      });
+    };
+
+    const raf = window.requestAnimationFrame(updateMoreMenuPosition);
+    const handleResizeOrScroll = () => updateMoreMenuPosition();
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (moreMenuButtonRef.current?.contains(target) || moreMenuPanelRef.current?.contains(target)) {
+        return;
+      }
+      setMoreMenuOpen(false);
+    };
+
+    window.addEventListener('resize', handleResizeOrScroll);
+    window.addEventListener('scroll', handleResizeOrScroll, true);
+    document.addEventListener('mousedown', handleOutsideClick);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handleResizeOrScroll);
+      window.removeEventListener('scroll', handleResizeOrScroll, true);
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [moreMenuOpen]);
 
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -555,48 +606,54 @@ const CanvasInner: React.FC = () => {
           {/* 더보기 메뉴 */}
           <div className="relative">
             <button
+              ref={moreMenuButtonRef}
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
               className="p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors shadow-sm"
               title="더보기"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
-            {moreMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 z-level5 text-left">
-                <button
-                  onClick={() => {
-                    setNewNickname(user?.nickname || '');
-                    setIsProfileEditOpen(true);
-                    setMoreMenuOpen(false);
-                  }}
-                  className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 font-bold"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>프로필 수정</span>
-                </button>
-                <button
-                  onClick={() => {
-                    handleExportZip();
-                    setMoreMenuOpen(false);
-                  }}
-                  className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>ZIP 내보내기</span>
-                </button>
-                <button
-                  onClick={() => {
-                    fitView({ duration: 500 });
-                    setMoreMenuOpen(false);
-                  }}
-                  className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Maximize className="w-4 h-4" />
-                  <span>화면 채우기</span>
-                </button>
-              </div>
-            )}
           </div>
+          {moreMenuOpen && createPortal(
+            <div
+              ref={moreMenuPanelRef}
+              style={moreMenuStyle}
+              className="w-40 max-h-[calc(100vh-96px)] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 text-left"
+            >
+              <button
+                onClick={() => {
+                  setNewNickname(user?.nickname || '');
+                  setIsProfileEditOpen(true);
+                  setMoreMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 font-bold"
+              >
+                <Settings className="w-4 h-4" />
+                <span>프로필 수정</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleExportZip();
+                  setMoreMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>ZIP 내보내기</span>
+              </button>
+              <button
+                onClick={() => {
+                  fitView({ duration: 500 });
+                  setMoreMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Maximize className="w-4 h-4" />
+                <span>화면 채우기</span>
+              </button>
+            </div>,
+            document.body
+          )}
         </div>
       </header>
 

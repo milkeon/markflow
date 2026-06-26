@@ -32,8 +32,8 @@ export interface NodeHistoryItem {
   createdAt: string;
 }
 
-const SOCKET_URL = 'http://localhost:5000';
-const API_URL = 'http://localhost:5000/api';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 export const useCollaboration = () => {
   const { user, token } = useAuthStore();
