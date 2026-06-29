@@ -35,8 +35,12 @@ secrets/
 # ───────── Prisma ─────────
 # 생성된 클라이언트(커스텀 output 사용 시) · 로컬 DB 파일
 apps/api/prisma/generated/
+apps/api/prisma/migrations/
 *.db
 *.db-journal
+
+# ───────── 로컬 런타임 데이터 (JSON 파일 스토어) ─────────
+apps/api/data/
 
 # ───────── Claude Code / 로컬 툴 상태 ─────────
 .claude/settings.local.json

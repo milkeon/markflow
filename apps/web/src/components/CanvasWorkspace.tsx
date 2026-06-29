@@ -8,21 +8,50 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
-import { useCanvasStore } from '../store/canvasStore.js';
+import { useCanvasStore, localDraggingNodeIds } from '../store/canvasStore.js';
 import { useProjectStore } from '../store/projectStore.js';
 import { useAuthStore } from '../store/authStore.js';
+import { confirmDialog } from '../store/confirmStore.js';
 import { useCollaboration } from '../hooks/useCollaboration.js';
+import { useModalDismiss } from '../hooks/useModalDismiss.js';
 import { MarkdownNode } from './MarkdownNode.js';
 import MDEditor from '@uiw/react-md-editor';
 import {
   Plus, Maximize, Save, Trash2, ArrowLeft,
   MessageSquare, Send, X, Download, History, Clock,
   ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut, MoreVertical,
-  AlertTriangle, RotateCcw, Settings
+  AlertTriangle, RotateCcw, Settings, Undo2, Redo2
 } from 'lucide-react';
 import JSZip from 'jszip';
 
 import '@xyflow/react/dist/style.css';
+
+// 이메일 전체 문자열 기반 해시 (32bit로 고정해 부동소수점 오버플로우로 인한 충돌 방지)
+const hashEmail = (email: string): number => {
+  let acc = 0;
+  for (const ch of email) {
+    acc = (acc * 31 + ch.charCodeAt(0)) | 0;
+  }
+  return Math.abs(acc);
+};
+
+// 사용자 구분용 공용 색상 팔레트: 색상환에서 서로 멀리 떨어진 색만 골라
+// 인접 색끼리 헷갈리지 않게 함 (커서/아바타/채팅 아이콘 등 전부 동일 팔레트 사용)
+const USER_COLORS = [
+  '#e11d48', // rose
+  '#2563eb', // blue
+  '#16a34a', // green
+  '#d97706', // amber
+  '#7c3aed', // violet
+  '#0891b2', // cyan
+  '#db2777', // pink
+  '#65a30d', // lime
+  '#9333ea', // purple
+  '#0d9488', // teal
+  '#dc2626', // red
+  '#4338ca' // indigo
+];
+const getUserColor = (email: string) => USER_COLORS[hashEmail(email) % USER_COLORS.length];
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 
@@ -47,7 +76,9 @@ const CanvasInner: React.FC = () => {
     getDeletedNodes,
     restoreNode,
     updateNodeData,
-    softDeleteNode
+    softDeleteNode,
+    undo,
+    redo
   } = useCanvasStore();
 
   const { currentProject, selectProject, deleteProject, showToast } = useProjectStore();
@@ -61,7 +92,9 @@ const CanvasInner: React.FC = () => {
     chatMessages,
     histories,
     emitNodeChange,
+    emitNodePositions,
     emitEdgeChange,
+    emitTrashChange,
     emitCursorMove,
     lockNode,
     unlockNode,
@@ -116,12 +149,59 @@ const CanvasInner: React.FC = () => {
 
   // 로컬 노드/엣지 변경 시 실시간 동기화 (수신된 패치가 아닐 때만 발송)
   const isIncomingUpdate = useCanvasStore((state) => state.isIncomingUpdate);
+  const canUndo = useCanvasStore((state) => state.past.length > 0);
+  const canRedo = useCanvasStore((state) => state.future.length > 0);
 
+  // 실행 취소/다시 실행 키보드 단축키 (입력창에 포커스가 있을 때는 무시)
   useEffect(() => {
-    if (nodes.length > 0 && !isIncomingUpdate) {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isEditable = ['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable;
+      if (isEditable) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+
+      if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  // 전체 노드 배열 동기화: 추가/삭제/내용수정/드롭완료 등에 사용.
+  // 드래그가 진행 중인 동안(localDraggingNodeIds가 비어있지 않음)은 onNodeDrag에서
+  // 좌표만 가볍게 보내는 emitNodePositions를 쓰므로 여기서는 건너뛴다 — 안 그러면
+  // 매 프레임마다 노드 전체(글 내용 포함) 배열을 통째로 보내게 되어 드롭 후에도
+  // 큐에 쌓인 옛 위치가 잔상처럼 따라오는 지연이 생긴다.
+  useEffect(() => {
+    if (nodes.length > 0 && !isIncomingUpdate && localDraggingNodeIds.size === 0) {
       emitNodeChange(nodes);
     }
   }, [nodes, emitNodeChange, isIncomingUpdate]);
+
+  // 드래그 중 좌표 패치 전송: 50ms 단위로 묶어 보내되 마지막 값은 항상 보장
+  const lastPositionEmitRef = useRef(0);
+  const pendingPositionEmitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emitDraggedPositionsThrottled = (draggedNodes: { id: string; position: { x: number; y: number } }[]) => {
+    const positions = draggedNodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
+    const THROTTLE_MS = 50;
+    const elapsed = Date.now() - lastPositionEmitRef.current;
+    if (pendingPositionEmitRef.current) clearTimeout(pendingPositionEmitRef.current);
+
+    if (elapsed >= THROTTLE_MS) {
+      lastPositionEmitRef.current = Date.now();
+      emitNodePositions(positions);
+    } else {
+      pendingPositionEmitRef.current = setTimeout(() => {
+        lastPositionEmitRef.current = Date.now();
+        emitNodePositions(positions);
+      }, THROTTLE_MS - elapsed);
+    }
+  };
 
   useEffect(() => {
     if (edges.length > 0 && !isIncomingUpdate) {
@@ -129,9 +209,20 @@ const CanvasInner: React.FC = () => {
     }
   }, [edges, emitEdgeChange, isIncomingUpdate]);
 
+  useEffect(() => {
+    if (!isIncomingUpdate) {
+      emitTrashChange(trashNodes);
+    }
+  }, [trashNodes, emitTrashChange, isIncomingUpdate]);
+
   // 엣지 더블클릭 삭제 핸들러 (삭제 즉시 onEdgesChange를 통해 useEffect에서 발송됨)
-  const handleEdgeDoubleClick = (_event: any, edge: any) => {
-    const confirmDelete = window.confirm('이 연결선을 삭제하시겠습니까?');
+  const handleEdgeDoubleClick = async (_event: any, edge: any) => {
+    const confirmDelete = await confirmDialog({
+      title: '연결선 삭제',
+      message: '이 연결선을 삭제하시겠습니까?',
+      confirmText: '삭제',
+      danger: true
+    });
     if (confirmDelete) {
       onEdgesChange([{ id: edge.id, type: 'remove' }]);
       showToast('연결선이 삭제되었습니다.', 'info');
@@ -146,7 +237,11 @@ const CanvasInner: React.FC = () => {
       return;
     }
 
-    const confirmUpdate = window.confirm(`닉네임을 "${newNickname}"(으)로 변경하시겠습니까?`);
+    const confirmUpdate = await confirmDialog({
+      title: '닉네임 변경',
+      message: `닉네임을 "${newNickname}"(으)로 변경하시겠습니까?`,
+      confirmText: '변경'
+    });
     if (!confirmUpdate) return;
 
     const success = await updateProfile(newNickname);
@@ -307,8 +402,8 @@ const CanvasInner: React.FC = () => {
     }
   };
 
-  const handleRestoreNodeClick = (nodeId: string) => {
-    const success = restoreNode(nodeId);
+  const handleRestoreNodeClick = async (nodeId: string) => {
+    const success = await restoreNode(nodeId);
     if (success) {
       emitNodeHistoryAction(nodeId, 'restore');
     }
@@ -354,9 +449,12 @@ const CanvasInner: React.FC = () => {
   const handleDeleteCurrentProject = async () => {
     if (!currentProject) return;
 
-    const confirmDelete = window.confirm(
-      `정말로 프로젝트 "${currentProject.name}"을(를) 삭제하시겠습니까?\n삭제된 프로젝트는 휴지통에서 복구할 수 있습니다.`
-    );
+    const confirmDelete = await confirmDialog({
+      title: '프로젝트 삭제',
+      message: `정말로 프로젝트 "${currentProject.name}"을(를) 삭제하시겠습니까?\n삭제된 프로젝트는 휴지통에서 복구할 수 있습니다.`,
+      confirmText: '삭제',
+      danger: true
+    });
     if (!confirmDelete) return;
 
     const success = await deleteProject(currentProject.id);
@@ -478,32 +576,49 @@ const CanvasInner: React.FC = () => {
     }
   };
 
-  const handleModalDelete = () => {
+  useModalDismiss(!!activeEditingNodeId, handleModalClose);
+  useModalDismiss(isNodeTrashOpen, () => setIsNodeTrashOpen(false));
+  useModalDismiss(isProfileEditOpen, () => setIsProfileEditOpen(false));
+
+  const handleModalDelete = async () => {
     if (activeEditingNodeId) {
-      unlockNode(activeEditingNodeId);
-      const success = softDeleteNode(activeEditingNodeId);
+      const nodeId = activeEditingNodeId;
+      const success = await softDeleteNode(nodeId);
       if (success) {
-        emitNodeHistoryAction(activeEditingNodeId, 'delete');
+        unlockNode(nodeId);
+        emitNodeHistoryAction(nodeId, 'delete');
+        setActiveEditingNodeId(null);
+        setIsModalChatOpen(false);
       }
-      setActiveEditingNodeId(null);
-      setIsModalChatOpen(false);
     }
   };
 
   // 노드 일괄 소프트 삭제
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedNodeIds.size === 0) return;
-    const confirmDelete = window.confirm(`선택한 ${selectedNodeIds.size}개의 노드를 삭제하시겠습니까?\n삭제된 노드는 휴지통에서 복구할 수 있습니다.`);
-    if (!confirmDelete) return;
-    selectedNodeIds.forEach(id => {
-      // confirm 없이 직접 소프트삭제 처리 (confirm은 일괄 confirm으로 대체)
-      useCanvasStore.setState(state => ({
-        nodes: state.nodes.map(n =>
-          n.id === id ? { ...n, data: { ...n.data, deletedAt: new Date().toISOString() } } : n
-        )
-      }));
-      emitNodeHistoryAction(id, 'delete');
+    const confirmDelete = await confirmDialog({
+      title: '노드 일괄 삭제',
+      message: `선택한 ${selectedNodeIds.size}개의 노드를 삭제하시겠습니까?\n삭제된 노드는 휴지통에서 복구할 수 있습니다.`,
+      confirmText: '삭제',
+      danger: true
     });
+    if (!confirmDelete) return;
+    useCanvasStore.getState().pushHistory();
+    const ids = Array.from(selectedNodeIds);
+    const deletedAt = new Date().toISOString();
+    useCanvasStore.setState(state => {
+      const targets = state.nodes.filter(n => ids.includes(n.id));
+      return {
+        nodes: state.nodes.filter(n => !ids.includes(n.id)),
+        // 일괄 삭제 = soft delete + 연결된 엣지는 물리 삭제 (허깨비 엣지 방지)
+        edges: state.edges.filter(e => !ids.includes(e.source) && !ids.includes(e.target)),
+        trashNodes: [
+          ...state.trashNodes.filter(n => !ids.includes(n.id)),
+          ...targets.map(n => ({ ...n, data: { ...n.data, deletedAt: n.data.deletedAt ?? deletedAt } }))
+        ]
+      };
+    });
+    ids.forEach(id => emitNodeHistoryAction(id, 'delete'));
     if (currentProject) {
       useCanvasStore.getState().triggerAutoSave(currentProject.id);
     }
@@ -549,12 +664,11 @@ const CanvasInner: React.FC = () => {
           <div className="flex items-center -space-x-2 ml-2">
             {activeParticipants.map((p) => {
               const firstChar = p.nickname.charAt(0);
-              const hash = p.email.charCodeAt(0) || 0;
               return (
                 <div
                   key={p.email}
                   className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-extrabold text-white shadow-sm cursor-default transition-all hover:scale-105"
-                  style={{ backgroundColor: `hsl(${(hash * 37) % 360}, 65%, 45%)` }}
+                  style={{ backgroundColor: getUserColor(p.email) }}
                   title={`${p.nickname}${p.isMe ? ' (나)' : ''} (${p.email})`}
                 >
                   {firstChar}
@@ -580,6 +694,26 @@ const CanvasInner: React.FC = () => {
 
           <span className="w-px h-6 bg-gray-200 mx-1" />
 
+          {/* 실행 취소 / 다시 실행 */}
+          <button
+            onClick={() => undo()}
+            disabled={!canUndo}
+            className="p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+            title="실행 취소 (Ctrl+Z)"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => redo()}
+            disabled={!canRedo}
+            className="p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+            title="다시 실행 (Ctrl+Y)"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+
+          <span className="w-px h-6 bg-gray-200 mx-1" />
+
           {/* 히스토리 토글 */}
           <button
             onClick={() => {
@@ -594,10 +728,7 @@ const CanvasInner: React.FC = () => {
 
           {/* 휴지통 토글 */}
           <button
-            onClick={() => {
-              setIsLeftPanelOpen(true);
-              // 왼쪽 패널 열어서 하단 휴지통 강조
-            }}
+            onClick={() => setIsNodeTrashOpen(true)}
             className="p-2 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors shadow-sm relative"
             title="휴지통"
           >
@@ -888,9 +1019,24 @@ const CanvasInner: React.FC = () => {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeDragStart={(_e, node) => {
+              useCanvasStore.getState().pushHistory();
+              localDraggingNodeIds.add(node.id);
+            }}
+            onNodeDragStop={(_e, node) => localDraggingNodeIds.delete(node.id)}
+            onNodeDrag={(_e, node) => emitDraggedPositionsThrottled([node])}
+            onSelectionDragStart={(_e, draggedNodes) => {
+              useCanvasStore.getState().pushHistory();
+              draggedNodes.forEach((n) => localDraggingNodeIds.add(n.id));
+            }}
+            onSelectionDragStop={(_e, draggedNodes) => {
+              draggedNodes.forEach((n) => localDraggingNodeIds.delete(n.id));
+            }}
+            onSelectionDrag={(_e, draggedNodes) => emitDraggedPositionsThrottled(draggedNodes)}
             onEdgeDoubleClick={handleEdgeDoubleClick}
             nodeTypes={nodeTypes}
             onViewportChange={(viewport) => setCurrentZoom(viewport.zoom)}
+            connectionRadius={40}
             fitView
             minZoom={0.1}
             maxZoom={2}
@@ -910,26 +1056,6 @@ const CanvasInner: React.FC = () => {
               <span>{isSaving ? '저장 중' : '저장 완료'}</span>
             </div>
           </div>
-
-          {/* 하단 중앙: 임시 저장소 복원 드래프트 바 */}
-          {deletedNodes.length > 0 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-level3 px-4 py-2.5 bg-white/95 border border-gray-200/90 rounded-2xl shadow-xl flex items-center gap-3 backdrop-blur-md">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-xs font-bold text-gray-700">임시 저장소 · {deletedNodes.length}</span>
-              </div>
-              <span className="w-px h-4 bg-gray-200" />
-              <span className="text-xs text-gray-600 max-w-[150px] truncate font-semibold">
-                {deletedNodes[0].data.title}
-              </span>
-              <button
-                onClick={() => handleRestoreNodeClick(deletedNodes[0].id)}
-                className="px-2.5 py-1 bg-[#172b4d] hover:bg-[#091e42] text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm"
-              >
-                복원
-              </button>
-            </div>
-          )}
 
           {/* 하단 좌측: 휴지통 버튼 */}
           <div className="absolute bottom-4 left-4 z-level3 flex items-center gap-2">
@@ -987,12 +1113,7 @@ const CanvasInner: React.FC = () => {
               // 변환 실패 시 원본 사용
             }
 
-            const hash = cursor.email.split('@')[0].charCodeAt(0) || 0;
-            const colors = [
-              '#db2777', '#f43f5e', '#a855f7', '#3b82f6',
-              '#06b6d4', '#10b981', '#f59e0b', '#16a34a'
-            ];
-            const color = colors[hash % colors.length];
+            const color = getUserColor(cursor.email);
 
             return (
               <div
@@ -1004,6 +1125,7 @@ const CanvasInner: React.FC = () => {
                   transform: 'translate(-2px, -2px)'
                 }}
               >
+                {/* 표준 포인터(화살표) 모양, 사용자 색으로 채움 */}
                 <svg
                   className="w-5 h-5 drop-shadow-md"
                   viewBox="0 0 24 24"
@@ -1011,10 +1133,10 @@ const CanvasInner: React.FC = () => {
                   xmlns="http://www.w3.org/2000/svg"
                 >
                   <path
-                    d="M3 3V21L9 15L13 23L16 21L12 13L20 13L3 3Z"
+                    d="M5 3L19 12L12 13L9 20L5 3Z"
                     fill={color}
                     stroke="white"
-                    strokeWidth="1.5"
+                    strokeWidth="1.2"
                     strokeLinejoin="round"
                   />
                 </svg>
@@ -1092,13 +1214,11 @@ const CanvasInner: React.FC = () => {
                     <div className="flex items-center -space-x-1">
                       {activeParticipants.slice(0, 5).map((p) => {
                         const firstChar = p.nickname.charAt(0);
-                        const hash = p.email.charCodeAt(0) || 0;
-                        const bgColors = ['bg-[#10b981]', 'bg-[#3b82f6]', 'bg-[#a855f7]', 'bg-[#ec4899]', 'bg-[#f59e0b]', 'bg-[#14b8a6]'];
-                        const bgClass = bgColors[hash % bgColors.length];
                         return (
                           <div
                             key={p.email}
-                            className={`w-5.5 h-5.5 rounded-full ${bgClass} flex items-center justify-center text-[8px] font-extrabold text-white border border-white`}
+                            className="w-5.5 h-5.5 rounded-full flex items-center justify-center text-[8px] font-extrabold text-white border border-white"
+                            style={{ backgroundColor: getUserColor(p.email) }}
                             title={p.nickname}
                           >
                             {firstChar}
@@ -1256,13 +1376,11 @@ const CanvasInner: React.FC = () => {
               <div className="flex flex-col items-center gap-1">
                 {activeParticipants.slice(0, 3).map((p) => {
                   const firstChar = p.nickname.charAt(0);
-                  const hash = p.email.charCodeAt(0) || 0;
-                  const bgColors = ['bg-[#10b981]', 'bg-[#3b82f6]', 'bg-[#a855f7]', 'bg-[#ec4899]', 'bg-[#f59e0b]', 'bg-[#14b8a6]'];
-                  const bgClass = bgColors[hash % bgColors.length];
                   return (
                     <div
                       key={p.email}
-                      className={`w-5.5 h-5.5 rounded-full ${bgClass} flex items-center justify-center text-[8px] font-extrabold text-white border border-white`}
+                      className="w-5.5 h-5.5 rounded-full flex items-center justify-center text-[8px] font-extrabold text-white border border-white"
+                      style={{ backgroundColor: getUserColor(p.email) }}
                       title={p.nickname}
                     >
                       {firstChar}
@@ -1282,8 +1400,14 @@ const CanvasInner: React.FC = () => {
 
       {/* 이미지 1 & 2 스타일: 마크다운 상세 에디터 모달 (z-level4) */}
       {activeEditingNodeId && editingNode && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-[90vw] h-[85vh] bg-[#f8f9fa] border border-gray-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden relative">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={handleModalClose}
+        >
+          <div
+            className="w-[90vw] h-[85vh] bg-[#f8f9fa] border border-gray-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden relative"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             {/* 모달 상단 헤더 */}
             <div className="h-16 border-b border-gray-200 bg-white/95 px-6 flex items-center justify-between shadow-sm">
@@ -1399,8 +1523,14 @@ const CanvasInner: React.FC = () => {
 
       {/* 모달: 삭제된 노드 휴지통 팝업 */}
       {isNodeTrashOpen && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md p-6 rounded-3xl border border-gray-200 bg-white shadow-2xl relative max-h-[70vh] flex flex-col">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsNodeTrashOpen(false)}
+        >
+          <div
+            className="w-full max-w-md p-6 rounded-3xl border border-gray-200 bg-white shadow-2xl relative max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setIsNodeTrashOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-150 text-gray-400 hover:text-gray-700 transition-colors"
@@ -1465,8 +1595,14 @@ const CanvasInner: React.FC = () => {
 
       {/* 모달: 프로필 수정 팝업 */}
       {isProfileEditOpen && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md p-6 rounded-3xl border border-gray-200 bg-white shadow-2xl relative">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsProfileEditOpen(false)}
+        >
+          <div
+            className="w-full max-w-md p-6 rounded-3xl border border-gray-200 bg-white shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setIsProfileEditOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-150 text-gray-400 hover:text-gray-700 transition-colors"

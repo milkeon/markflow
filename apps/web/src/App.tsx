@@ -9,6 +9,7 @@ import { Landing } from './components/Landing.js';
 import { Dashboard } from './components/Dashboard.js';
 import { CanvasWorkspace } from './components/CanvasWorkspace.js';
 import { Toast } from './components/Toast.js';
+import { ConfirmDialog } from './components/ConfirmDialog.js';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
 
@@ -96,6 +97,7 @@ function App() {
         <>
           <Login onBackToHome={() => setShowLogin(false)} />
           <Toast />
+          <ConfirmDialog />
         </>
       );
     }
@@ -103,6 +105,7 @@ function App() {
       <>
         <Landing onStart={() => setShowLogin(true)} />
         <Toast />
+        <ConfirmDialog />
       </>
     );
   }
@@ -113,6 +116,7 @@ function App() {
       <div className="min-h-screen bg-dark-900 text-white flex flex-col w-full h-screen">
         <CanvasWorkspace />
         <Toast />
+        <ConfirmDialog />
       </div>
     );
   }
@@ -122,6 +126,7 @@ function App() {
     <>
       <Dashboard />
       <Toast />
+      <ConfirmDialog />
     </>
   );
 }

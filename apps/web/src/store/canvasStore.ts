@@ -14,6 +14,7 @@ import type {
 } from '@xyflow/react';
 import { useAuthStore } from './authStore.js';
 import { useProjectStore } from './projectStore.js';
+import { confirmDialog } from './confirmStore.js';
 
 // 마크다운 노드 데이터 커스텀 인터페이스
 export interface MarkdownNodeData extends Record<string, any> {
@@ -26,6 +27,14 @@ export interface MarkdownNodeData extends Record<string, any> {
   emitNodeHistoryAction?: (nodeId: string, action: 'create' | 'update' | 'delete' | 'restore') => void;
 }
 
+interface CanvasSnapshot {
+  nodes: Node<MarkdownNodeData>[];
+  edges: Edge[];
+  trashNodes: Node<MarkdownNodeData>[];
+}
+
+const MAX_HISTORY = 50;
+
 interface CanvasState {
   nodes: Node<MarkdownNodeData>[];
   trashNodes: Node<MarkdownNodeData>[];
@@ -35,6 +44,15 @@ interface CanvasState {
   saveTimer: NodeJS.Timeout | null;
   isIncomingUpdate: boolean;
   setIncomingUpdate: (val: boolean) => void;
+
+  // 실행 취소/다시 실행
+  past: CanvasSnapshot[];
+  future: CanvasSnapshot[];
+  pushHistory: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  undo: () => void;
+  redo: () => void;
 
   // 캔버스 데이터 불러오기
   loadCanvas: (projectId: string) => Promise<void>;
@@ -51,9 +69,9 @@ interface CanvasState {
   // 노드 조작 메서드 (리턴 타입 변경: ID 및 성공 여부 반환)
   addMarkdownNode: (x: number, y: number, category?: 'idea' | 'document' | 'decision' | 'todo' | 'data') => string | null;
   updateNodeData: (nodeId: string, updates: Partial<MarkdownNodeData>) => void;
-  softDeleteNode: (nodeId: string) => boolean;
+  softDeleteNode: (nodeId: string) => Promise<boolean>;
   getDeletedNodes: () => Node<MarkdownNodeData>[];
-  restoreNode: (nodeId: string) => boolean;
+  restoreNode: (nodeId: string) => Promise<boolean>;
 
   // 상태 초기화
   clearCanvas: () => void;
@@ -69,6 +87,16 @@ const getAuthHeaders = () => {
   };
 };
 
+// pushHistory 코얼레싱 가드: 키 입력 1번이 onNodesChange + onEdgesChange처럼
+// 같은 동기 실행 구간에서 여러 번 호출되는 걸 1개의 undo 체크포인트로 합친다
+let historyTxOpen = false;
+
+// 로컬에서 지금 드래그 중인 노드 id 집합. 리렌더가 필요 없는 순수 좌표용 플래그라
+// zustand state가 아니라 모듈 레벨 Set으로 둔다.
+// 원격에서 전체 nodes 배열이 도착해도, 내가 지금 드래그 중인 노드의 위치는
+// 그 배열로 덮어쓰지 않는다 (안 그러면 드래그 중에 노드가 혼자 움직이는 것처럼 보임).
+export const localDraggingNodeIds = new Set<string>();
+
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: [],
   trashNodes: [],
@@ -79,8 +107,64 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isIncomingUpdate: false,
   setIncomingUpdate: (val) => set({ isIncomingUpdate: val }),
 
+  past: [],
+  future: [],
+
+  // 변경 직전 상태를 히스토리에 적재 (원격 수신 적용 중에는 기록하지 않음)
+  pushHistory: () => {
+    if (historyTxOpen) return;
+    const state = get();
+    if (state.isIncomingUpdate) return;
+
+    historyTxOpen = true;
+    queueMicrotask(() => {
+      historyTxOpen = false;
+    });
+
+    const snapshot: CanvasSnapshot = {
+      nodes: state.nodes,
+      edges: state.edges,
+      trashNodes: state.trashNodes
+    };
+    set({
+      past: [...state.past, snapshot].slice(-MAX_HISTORY),
+      future: []
+    });
+  },
+
+  canUndo: () => get().past.length > 0,
+  canRedo: () => get().future.length > 0,
+
+  undo: () => {
+    const state = get();
+    const previous = state.past[state.past.length - 1];
+    if (!previous) return;
+    const current: CanvasSnapshot = { nodes: state.nodes, edges: state.edges, trashNodes: state.trashNodes };
+    set({
+      ...previous,
+      past: state.past.slice(0, -1),
+      future: [current, ...state.future]
+    });
+    const currentProj = useProjectStore.getState().currentProject;
+    if (currentProj) get().triggerAutoSave(currentProj.id);
+  },
+
+  redo: () => {
+    const state = get();
+    const next = state.future[0];
+    if (!next) return;
+    const current: CanvasSnapshot = { nodes: state.nodes, edges: state.edges, trashNodes: state.trashNodes };
+    set({
+      ...next,
+      past: [...state.past, current],
+      future: state.future.slice(1)
+    });
+    const currentProj = useProjectStore.getState().currentProject;
+    if (currentProj) get().triggerAutoSave(currentProj.id);
+  },
+
   loadCanvas: async (projectId) => {
-    set({ isLoading: true });
+    set({ isLoading: true, past: [], future: [] });
     try {
       const res = await fetch(`${API_URL}/projects/${projectId}/canvas`, {
         headers: getAuthHeaders()
@@ -93,10 +177,16 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       const incomingTrashNodes = Array.isArray(canvasData.trashNodes) ? canvasData.trashNodes : [];
       const migratedTrashNodes = incomingNodes.filter((node: any) => node?.data?.deletedAt !== undefined);
       const activeNodes = incomingNodes.filter((node: any) => node?.data?.deletedAt === undefined);
+      const activeNodeIds = new Set(activeNodes.map((node: any) => node.id));
+      // 과거에 정리되지 않고 남아있던, 존재하지 않는 노드를 가리키는 허깨비 엣지를 걸러낸다
+      const incomingEdges = Array.isArray(canvasData.edges) ? canvasData.edges : [];
+      const cleanedEdges = incomingEdges.filter(
+        (edge: any) => activeNodeIds.has(edge.source) && activeNodeIds.has(edge.target)
+      );
       set({
         nodes: activeNodes,
         trashNodes: [...incomingTrashNodes, ...migratedTrashNodes],
-        edges: canvasData.edges || [],
+        edges: cleanedEdges,
         isLoading: false
       });
     } catch (err: any) {
@@ -138,6 +228,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   onNodesChange: (changes) => {
+    // 삭제는 즉시 한 번 적재. 드래그 이동은 onNodeDragStart/onSelectionDragStart에서
+    // 제스처 시작 시점에 1번만 적재한다 (여기서 dragging 플래그로 추론하면 변경 묶음에 따라
+    // 여러 번/늦게 찍혀 undo 1번에 여러 동작이 같이 풀리는 문제가 생긴다).
+    const isHistoryPoint = changes.some((change: any) => change.type === 'remove');
+    if (isHistoryPoint) get().pushHistory();
+
     set((state) => {
       const removeIds = changes
         .filter((change: any) => change.type === 'remove')
@@ -167,16 +263,24 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         ];
       }
 
+      // 노드 삭제 시 연결된 엣지도 같이 정리 (허깨비 엣지 방지)
+      const updatedEdges = removeIds.length > 0
+        ? state.edges.filter((edge) => !removeIds.includes(edge.source) && !removeIds.includes(edge.target))
+        : state.edges;
+
       const currentProj = useProjectStore.getState().currentProject;
       if (currentProj) {
         setTimeout(() => get().triggerAutoSave(currentProj.id), 0);
       }
 
-      return { nodes: updatedNodes, trashNodes: updatedTrashNodes };
+      return { nodes: updatedNodes, edges: updatedEdges, trashNodes: updatedTrashNodes };
     });
   },
 
   onEdgesChange: (changes) => {
+    const isHistoryPoint = changes.some((change: any) => change.type === 'remove');
+    if (isHistoryPoint) get().pushHistory();
+
     set((state) => {
       const updatedEdges = applyEdgeChanges(changes, state.edges);
 
@@ -190,6 +294,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   onConnect: (connection) => {
+    get().pushHistory();
     set((state) => {
       const updatedEdges = addEdge(connection, state.edges);
 
@@ -205,6 +310,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   addMarkdownNode: (x, y, category) => {
     const currentProj = useProjectStore.getState().currentProject;
     if (!currentProj) return null;
+    get().pushHistory();
 
     const { nodes } = get();
 
@@ -286,16 +392,22 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     get().triggerAutoSave(currentProj.id);
   },
 
-  softDeleteNode: (nodeId) => {
+  softDeleteNode: async (nodeId) => {
     const currentProj = useProjectStore.getState().currentProject;
     if (!currentProj) return false;
 
-    const confirmDelete = window.confirm('이 마크다운 노드를 삭제하시겠습니까?\n삭제된 노드는 휴지통에서 복구할 수 있습니다.');
+    const confirmDelete = await confirmDialog({
+      title: '노드 삭제',
+      message: '이 마크다운 노드를 삭제하시겠습니까?\n삭제된 노드는 휴지통에서 복구할 수 있습니다.',
+      confirmText: '삭제',
+      danger: true
+    });
     if (!confirmDelete) return false;
 
     const target = get().nodes.find((node) => node.id === nodeId);
     if (!target) return false;
 
+    get().pushHistory();
     set((state) => {
       const deletedNode = {
         ...target,
@@ -307,6 +419,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
       return {
         nodes: state.nodes.filter((node) => node.id !== nodeId),
+        // 휴지통 이동 = soft delete + 연결된 엣지는 물리 삭제 (복구 대상 아님, 허깨비 엣지 방지)
+        edges: state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
         trashNodes: [
           ...state.trashNodes.filter((node) => node.id !== nodeId),
           deletedNode
@@ -323,16 +437,21 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return get().trashNodes;
   },
 
-  restoreNode: (nodeId) => {
+  restoreNode: async (nodeId) => {
     const currentProj = useProjectStore.getState().currentProject;
     if (!currentProj) return false;
 
-    const confirmRestore = window.confirm('삭제된 노드를 복구하시겠습니까?');
+    const confirmRestore = await confirmDialog({
+      title: '노드 복구',
+      message: '삭제된 노드를 복구하시겠습니까?',
+      confirmText: '복구'
+    });
     if (!confirmRestore) return false;
 
     const target = get().trashNodes.find((node) => node.id === nodeId);
     if (!target) return false;
 
+    get().pushHistory();
     set((state) => {
       const { deletedAt, ...cleanedData } = target.data;
       const restoredNode: Node<MarkdownNodeData> = {
@@ -354,6 +473,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   clearCanvas: () => {
     const { saveTimer } = get();
     if (saveTimer) clearTimeout(saveTimer);
-    set({ nodes: [], trashNodes: [], edges: [], saveTimer: null });
+    set({ nodes: [], trashNodes: [], edges: [], saveTimer: null, past: [], future: [] });
   }
 }));

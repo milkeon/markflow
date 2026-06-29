@@ -80,9 +80,9 @@ export const MarkdownNode: React.FC<MarkdownNodeProps> = ({ id, data, selected }
     data.emitNodeHistoryAction?.(id, 'update');
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const success = softDeleteNode(id);
+    const success = await softDeleteNode(id);
     if (success) {
       data.emitNodeHistoryAction?.(id, 'delete');
     }
@@ -109,11 +109,20 @@ export const MarkdownNode: React.FC<MarkdownNodeProps> = ({ id, data, selected }
       }}
     >
       
-      {/* React Flow 연결 포트 핸들 - 상하좌우 부착 */}
-      <Handle type="target" position={Position.Top} id="top-target" className="!bg-gray-300 !w-3 !h-3 !border-white" />
-      <Handle type="source" position={Position.Bottom} id="bottom-source" className="!bg-gray-300 !w-3 !h-3 !border-white" />
-      <Handle type="target" position={Position.Left} id="left-target" className="!bg-gray-300 !w-3 !h-3 !border-white" />
-      <Handle type="source" position={Position.Right} id="right-source" className="!bg-gray-300 !w-3 !h-3 !border-white" />
+      {/* React Flow 연결 포트 핸들 - 상하좌우 부착. 실제 클릭(드래그 시작) 가능 영역은
+          !w-5 !h-5(20px)로 넉넉하게 잡고, 보이는 점은 안쪽 child로 작게 그린다 */}
+      <Handle type="target" position={Position.Top} id="top-target" className="!bg-transparent !border-none !w-5 !h-5 group">
+        <span className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-gray-300 border-2 border-white group-hover:bg-[#00875a] group-hover:scale-125 transition-transform pointer-events-none" />
+      </Handle>
+      <Handle type="source" position={Position.Bottom} id="bottom-source" className="!bg-transparent !border-none !w-5 !h-5 group">
+        <span className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-gray-300 border-2 border-white group-hover:bg-[#00875a] group-hover:scale-125 transition-transform pointer-events-none" />
+      </Handle>
+      <Handle type="target" position={Position.Left} id="left-target" className="!bg-transparent !border-none !w-5 !h-5 group">
+        <span className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-gray-300 border-2 border-white group-hover:bg-[#00875a] group-hover:scale-125 transition-transform pointer-events-none" />
+      </Handle>
+      <Handle type="source" position={Position.Right} id="right-source" className="!bg-transparent !border-none !w-5 !h-5 group">
+        <span className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-gray-300 border-2 border-white group-hover:bg-[#00875a] group-hover:scale-125 transition-transform pointer-events-none" />
+      </Handle>
 
       {/* 노드 헤더 */}
       <div className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 handle react-flow__draghandle cursor-move select-none ${style.bg}`}>

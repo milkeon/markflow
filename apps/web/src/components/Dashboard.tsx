@@ -1,8 +1,13 @@
 // frontend/src/components/Dashboard.tsx
 import React, { useEffect, useState, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { useProjectStore, type Project } from '../store/projectStore.js';
 import { useAuthStore } from '../store/authStore.js';
+import { confirmDialog } from '../store/confirmStore.js';
+import { useModalDismiss } from '../hooks/useModalDismiss.js';
 import { Plus, Settings, Trash2, UserPlus, RotateCcw, LogOut, Folder, FolderOpen, Shield, Users, X } from 'lucide-react';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
 
 export const Dashboard: React.FC = () => {
   const { logout, user, updateProfile } = useAuthStore();
@@ -45,7 +50,11 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    const confirmUpdate = window.confirm(`닉네임을 "${newNickname}"(으)로 변경하시겠습니까?`);
+    const confirmUpdate = await confirmDialog({
+      title: '닉네임 변경',
+      message: `닉네임을 "${newNickname}"(으)로 변경하시겠습니까?`,
+      confirmText: '변경'
+    });
     if (!confirmUpdate) return;
 
     const success = await updateProfile(newNickname);
@@ -61,6 +70,18 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  // 다른 사용자의 초대/변경을 실시간으로 반영 (새로고침 없이)
+  useEffect(() => {
+    if (!user) return;
+    const socket = io(SOCKET_URL, { transports: ['websocket'], forceNew: true });
+    socket.on('projects-updated', () => {
+      fetchProjects();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [user]);
 
   // 모달이 켜질 때 자동 포커스
   useEffect(() => {
@@ -82,6 +103,10 @@ export const Dashboard: React.FC = () => {
     }
   }, [activeModal, isTrashOpen]);
 
+  useModalDismiss(!!activeModal, () => { setActiveModal(null); setTargetProject(null); });
+  useModalDismiss(isTrashOpen, () => setIsTrashOpen(false));
+  useModalDismiss(isProfileEditOpen, () => setIsProfileEditOpen(false));
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
@@ -96,7 +121,11 @@ export const Dashboard: React.FC = () => {
     if (!targetProject || !modalInput.trim()) return;
 
     // UI/UX 규칙: 수정 완료 시에는 항상 한번더 확인문구 보여줌
-    const confirmRename = window.confirm(`프로젝트 이름을 "${targetProject.name}"에서 "${modalInput}"(으)로 변경하시겠습니까?`);
+    const confirmRename = await confirmDialog({
+      title: '프로젝트 이름 변경',
+      message: `프로젝트 이름을 "${targetProject.name}"에서 "${modalInput}"(으)로 변경하시겠습니까?`,
+      confirmText: '변경'
+    });
     if (!confirmRename) return;
 
     const success = await renameProject(targetProject.id, modalInput);
@@ -109,7 +138,12 @@ export const Dashboard: React.FC = () => {
 
   const handleDeleteClick = async (project: Project) => {
     // UI/UX 규칙: 삭제 완료 시에는 항상 한번더 확인문구 보여줌
-    const confirmDelete = window.confirm(`정말로 프로젝트 "${project.name}"을(를) 삭제하시겠습니까?\n삭제된 프로젝트는 휴지통에서 언제든지 복구할 수 있습니다.`);
+    const confirmDelete = await confirmDialog({
+      title: '프로젝트 삭제',
+      message: `정말로 프로젝트 "${project.name}"을(를) 삭제하시겠습니까?\n삭제된 프로젝트는 휴지통에서 언제든지 복구할 수 있습니다.`,
+      confirmText: '삭제',
+      danger: true
+    });
     if (!confirmDelete) return;
 
     const success = await deleteProject(project.id);
@@ -330,8 +364,14 @@ export const Dashboard: React.FC = () => {
 
       {/* 모달: 이름 변경 및 멤버 초대 */}
       {activeModal && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { setActiveModal(null); setTargetProject(null); }}
+        >
+          <div
+            className="w-full max-w-md p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => { setActiveModal(null); setTargetProject(null); }}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
@@ -382,8 +422,14 @@ export const Dashboard: React.FC = () => {
 
       {/* 모달: 휴지통 열기 */}
       {isTrashOpen && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-2xl p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative max-h-[80vh] flex flex-col">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsTrashOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setIsTrashOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
@@ -416,7 +462,11 @@ export const Dashboard: React.FC = () => {
                       </div>
                       <button
                         onClick={async () => {
-                          const confirmRestore = window.confirm(`"${project.name}" 프로젝트를 복구하시겠습니까?`);
+                          const confirmRestore = await confirmDialog({
+                            title: '프로젝트 복구',
+                            message: `"${project.name}" 프로젝트를 복구하시겠습니까?`,
+                            confirmText: '복구'
+                          });
                           if (confirmRestore) {
                             await restoreProject(project.id);
                           }
@@ -437,8 +487,14 @@ export const Dashboard: React.FC = () => {
 
       {/* 모달: 프로필 수정 */}
       {isProfileEditOpen && (
-        <div className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative">
+        <div
+          className="fixed inset-0 z-level4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setIsProfileEditOpen(false)}
+        >
+          <div
+            className="w-full max-w-md p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setIsProfileEditOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"

@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '../store/authStore.js';
 import { useProjectStore } from '../store/projectStore.js';
-import { useCanvasStore, type MarkdownNodeData } from '../store/canvasStore.js';
+import { useCanvasStore, localDraggingNodeIds, type MarkdownNodeData } from '../store/canvasStore.js';
 import type { Node, Edge } from '@xyflow/react';
 
 export interface Cursor {
@@ -113,7 +113,30 @@ export const useCollaboration = () => {
     socket.on('nodes-update', (updatedNodes: Node<MarkdownNodeData>[]) => {
       const store = useCanvasStore.getState();
       store.setIncomingUpdate(true);
-      useCanvasStore.setState({ nodes: updatedNodes });
+      // 내가 지금 드래그 중인 노드는 원격 배열로 덮어쓰지 않는다 (안 그러면
+      // 드래그 중 노드가 혼자 움직이는 것처럼 보임). 그 외 노드는 원격 값을 그대로 적용.
+      const localNodesById = new Map(store.nodes.map((n) => [n.id, n]));
+      const mergedNodes = updatedNodes.map((remoteNode) =>
+        localDraggingNodeIds.has(remoteNode.id) ? localNodesById.get(remoteNode.id) ?? remoteNode : remoteNode
+      );
+      useCanvasStore.setState({ nodes: mergedNodes });
+      setTimeout(() => {
+        useCanvasStore.getState().setIncomingUpdate(false);
+      }, 50);
+    });
+
+    // 드래그 중 가벼운 좌표 패치 수신 (전체 노드 배열이 아니라 좌표만 들어옴)
+    socket.on('node-position-update', (positions: { id: string; x: number; y: number }[]) => {
+      const store = useCanvasStore.getState();
+      store.setIncomingUpdate(true);
+      const posMap = new Map(positions.map((p) => [p.id, p]));
+      useCanvasStore.setState((state) => ({
+        nodes: state.nodes.map((n) => {
+          if (localDraggingNodeIds.has(n.id)) return n;
+          const p = posMap.get(n.id);
+          return p ? { ...n, position: { x: p.x, y: p.y } } : n;
+        })
+      }));
       setTimeout(() => {
         useCanvasStore.getState().setIncomingUpdate(false);
       }, 50);
@@ -123,6 +146,15 @@ export const useCollaboration = () => {
       const store = useCanvasStore.getState();
       store.setIncomingUpdate(true);
       useCanvasStore.setState({ edges: updatedEdges });
+      setTimeout(() => {
+        useCanvasStore.getState().setIncomingUpdate(false);
+      }, 50);
+    });
+
+    socket.on('trash-update', (updatedTrashNodes: Node<MarkdownNodeData>[]) => {
+      const store = useCanvasStore.getState();
+      store.setIncomingUpdate(true);
+      useCanvasStore.setState({ trashNodes: updatedTrashNodes });
       setTimeout(() => {
         useCanvasStore.getState().setIncomingUpdate(false);
       }, 50);
@@ -169,11 +201,30 @@ export const useCollaboration = () => {
     }
   }, [currentProject]);
 
+  // 드래그 중에는 이걸로 좌표만 가볍게 보낸다 (emitNodeChange는 전체 배열이라 드래그엔 안 씀)
+  const emitNodePositions = useCallback((positions: { id: string; x: number; y: number }[]) => {
+    if (socketRef.current && currentProject) {
+      socketRef.current.emit('node-position-change', {
+        projectId: currentProject.id,
+        positions
+      });
+    }
+  }, [currentProject]);
+
   const emitEdgeChange = useCallback((updatedEdges: Edge[]) => {
     if (socketRef.current && currentProject) {
       socketRef.current.emit('edges-change', {
         projectId: currentProject.id,
         edges: updatedEdges
+      });
+    }
+  }, [currentProject]);
+
+  const emitTrashChange = useCallback((updatedTrashNodes: Node<MarkdownNodeData>[]) => {
+    if (socketRef.current && currentProject) {
+      socketRef.current.emit('trash-change', {
+        projectId: currentProject.id,
+        trashNodes: updatedTrashNodes
       });
     }
   }, [currentProject]);
@@ -246,7 +297,9 @@ export const useCollaboration = () => {
     chatMessages,
     histories,
     emitNodeChange,
+    emitNodePositions,
     emitEdgeChange,
+    emitTrashChange,
     emitCursorMove,
     lockNode,
     unlockNode,

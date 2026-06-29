@@ -596,12 +596,17 @@ io.on('connection', (socket) => {
   socket.on('join-project', ({ projectId }) => {
     if (typeof projectId === 'string' && projectId) {
       socket.join(projectId);
+      socket.data.projectId = projectId;
     }
   });
 
   socket.on('leave-project', ({ projectId }) => {
     if (typeof projectId === 'string' && projectId) {
+      socket.to(projectId).emit('cursor-remove', { socketId: socket.id });
       socket.leave(projectId);
+      if (socket.data.projectId === projectId) {
+        socket.data.projectId = undefined;
+      }
     }
   });
 
@@ -634,6 +639,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 드래그 중 좌표만 가볍게 중계 (저장 X — 최종 위치는 드롭 시 nodes-change/자동저장이 책임짐)
+  socket.on('node-position-change', (payload) => {
+    if (!payload?.projectId || !Array.isArray(payload.positions)) return;
+    socket.to(payload.projectId).emit('node-position-update', payload.positions);
+  });
+
   socket.on('nodes-change', (payload) => {
     if (!payload?.projectId) return;
     const canvas = getProjectCanvas(payload.projectId);
@@ -662,6 +673,21 @@ io.on('connection', (socket) => {
     if (project) project.updatedAt = now();
     persistState();
     socket.to(payload.projectId).emit('edges-update', payload.edges);
+  });
+
+  socket.on('trash-change', (payload) => {
+    if (!payload?.projectId) return;
+    const canvas = getProjectCanvas(payload.projectId);
+    canvas.data = {
+      nodes: canvas.data.nodes,
+      edges: canvas.data.edges,
+      trashNodes: Array.isArray(payload.trashNodes) ? payload.trashNodes : []
+    };
+    canvas.updatedAt = now();
+    const project = state.projects.find((item) => item.id === payload.projectId);
+    if (project) project.updatedAt = now();
+    persistState();
+    socket.to(payload.projectId).emit('trash-update', payload.trashNodes);
   });
 
   socket.on('chat-message', (payload) => {
@@ -697,6 +723,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const projectId = socket.data.projectId;
+    if (typeof projectId === 'string' && projectId) {
+      socket.to(projectId).emit('cursor-remove', { socketId: socket.id });
+    }
     socket.removeAllListeners();
   });
 });
