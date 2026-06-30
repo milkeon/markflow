@@ -2,10 +2,11 @@
 // .claude/rules/realtime.md: 연결 1개·룸 1개(project:<id>), 이벤트명은 SOCKET_EVENTS만 사용.
 // 커서·소프트락은 in-memory(presenceStore), 노드/엣지/채팅 수신은 store에 적용만(재emit 금지).
 import { useEffect, useRef } from "react";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { SOCKET_EVENTS } from "@markflow/shared";
 import type { CanvasSnapshot, ChatMessageDTO, EdgeDTO, NodeDTO, XY } from "@markflow/shared";
 
+import { createSocket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useCanvasStore, fromNodeDTO } from "../store/canvasStore";
 import { useChatStore } from "../store/chatStore";
@@ -41,7 +42,7 @@ export function useSocketCollab(projectId: string): CollabAPI {
   const connect: CollabAPI["connect"] = (pid) => {
     if (socketRef.current) return;
     const token = useAuthStore.getState().token;
-    const socket = io(WS_URL, {
+    const socket = createSocket(WS_URL, {
       auth: { token },
       transports: ["websocket"],
     });

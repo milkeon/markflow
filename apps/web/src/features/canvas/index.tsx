@@ -1,7 +1,7 @@
 // React Flow 캔버스 화면 — IEUM-21 [F1-1.1] 스캐폴드 + IEUM-22 [F1-1.2] 노드 카드
 // + IEUM-23 [F1-1.3] Zustand 캔버스 스토어 + IEUM-27 [F1-2.1] 캔버스↔DB 연동·자동저장
-// + IEUM-28 [F1-2.2] 휴지통 드래그드롭 + IEUM-34 [F1-3.1] 실시간 소켓 연결(연결만 — 멀티커서
-// UI 렌더링은 IEUM-35).
+// + IEUM-28 [F1-2.2] 휴지통 드래그드롭 + IEUM-34 [F1-3.1] 실시간 소켓 연결
+// + IEUM-35 [F1-3.2] 멀티커서·소프트 락 UI.
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -15,9 +15,8 @@ import {
 import type { Node as FlowNode, OnNodeDrag } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useCollaboration } from "../../collab/useCollaboration";
-import type { CollabAPI } from "../../collab/CollabAPI";
-import { setActiveCollab, useCanvasStore } from "../../store/canvasStore";
+import { emitCursorPosition, useCanvasStore } from "../../store/canvasStore";
+import { CursorOverlay } from "./CursorOverlay";
 import { DEFAULT_VIEWPORT, MAX_ZOOM, MIN_ZOOM } from "./constants";
 import { LeftSidebar } from "./LeftSidebar";
 import { MarkdownNodeCard } from "./MarkdownNodeCard";
@@ -38,12 +37,10 @@ function isPointInRect(x: number, y: number, rect: DOMRect): boolean {
 }
 
 function CanvasSurface({
-  collab,
   leftSidebarExpanded,
   rightPanelExpanded,
   rightPanelOffset,
 }: {
-  collab: CollabAPI;
   leftSidebarExpanded: boolean;
   rightPanelExpanded: boolean;
   rightPanelOffset: number;
@@ -87,7 +84,7 @@ function CanvasSurface({
   // useSocketCollab 안에서 처리하므로 여기선 그냥 매 mousemove마다 호출해도 된다.
   const handlePointerMove = (e: React.MouseEvent) => {
     const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    collab.emitCursor(flowPos);
+    emitCursorPosition(flowPos);
   };
 
   return (
@@ -115,6 +112,7 @@ function CanvasSurface({
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color="#D9D5C9" />
         <MiniMap pannable zoomable className="!bg-surface !border !border-line" />
       </ReactFlow>
+      <CursorOverlay />
       <TrashPanel ref={trashRef} leftSidebarExpanded={leftSidebarExpanded} isDragOver={isDragOverTrash} />
       <ZoomControls offsetRight={rightPanelExpanded ? rightPanelOffset : 0} />
     </div>
@@ -128,7 +126,8 @@ export function CanvasPage() {
 
   const nodes = useCanvasStore((s) => s.nodes);
   const applyLocalAddNode = useCanvasStore((s) => s.applyLocalAddNode);
-  const collab = useCollaboration(projectId);
+  // 소켓 연결 생명주기는 ProjectCollabLayout(부모 라우트)이 소유한다 — 캔버스↔노드
+  // 에디터를 오가도 연결이 유지되어야 해서 더 위로 옮겼다.
 
   useEffect(() => {
     if (!projectId) return;
@@ -139,18 +138,6 @@ export function CanvasPage() {
         useCanvasStore.setState({ nodes: seedNodes, edges: seedEdges, isLoading: false });
       }
     });
-  }, [projectId]);
-
-  // 소켓 연결 생명주기 — canvasStore의 applyLocal*가 emit할 수 있도록 활성 인스턴스로 등록.
-  useEffect(() => {
-    if (!projectId) return;
-    collab.connect(projectId);
-    setActiveCollab(collab);
-    return () => {
-      setActiveCollab(null);
-      collab.disconnect();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const handleAddNode = () => {
@@ -166,14 +153,18 @@ export function CanvasPage() {
           onToggle={() => setLeftExpanded((v) => !v)}
           onAddNode={handleAddNode}
           nodeCount={nodes.length}
+          nodes={nodes.map((n) => ({ id: n.id, title: n.data.title }))}
         />
         <CanvasSurface
-          collab={collab}
           leftSidebarExpanded={leftExpanded}
           rightPanelExpanded={rightExpanded}
-          rightPanelOffset={372}
+          rightPanelOffset={340}
         />
-        <RightPanel expanded={rightExpanded} onToggle={() => setRightExpanded((v) => !v)} />
+        <RightPanel
+          projectId={projectId}
+          expanded={rightExpanded}
+          onToggle={() => setRightExpanded((v) => !v)}
+        />
       </div>
     </ReactFlowProvider>
   );

@@ -54,6 +54,7 @@ import {
   inviteMember,
   updateMemberRole,
   removeMember,
+  roleOf,
 } from "./db";
 
 // api()의 BASE와 동일해야 핸들러가 매칭된다.
@@ -229,7 +230,7 @@ export const handlers = [
     const record = findProject(params.projectId as string);
     if (!record) return notFound("프로젝트를 찾을 수 없습니다.");
     const res: CanvasSnapshot = {
-      project: { id: record.id, name: record.name, role: record.role },
+      project: { id: record.id, name: record.name, role: roleOf(record.id, db.user.email) },
       nodes: record.nodes,
       edges: record.edges,
     };
